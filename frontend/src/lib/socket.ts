@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { VITE_API_URL } from './config';
 
 let socket: Socket | null = null;
 
@@ -7,7 +8,7 @@ export const connectSocket = (token?: string) => {
     return socket;
   }
 
-  const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const serverUrl = VITE_API_URL;
   
   socket = io(serverUrl, {
     transports: ['websocket', 'polling'],
@@ -61,4 +62,3 @@ export const offNewMaterial = (callback?: (data: any) => void) => {
     socket.off('new_material', callback);
   }
 };
-

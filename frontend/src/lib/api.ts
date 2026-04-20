@@ -1,10 +1,7 @@
-const isLocal =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1";
+import { API_BASE_URL } from './config';
 
-const API_BASE_URL = isLocal
-  ? "http://localhost:3001/api"        // Local
-  : import.meta.env.VITE_API_URL || "https://exampulse.id/backend/api"; // Live
+
+
 
 
 // Helper function to get auth token
