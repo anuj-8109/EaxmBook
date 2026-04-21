@@ -66,16 +66,22 @@ const Jobs = () => {
     api_key: '',
     api_name: 'custom',
   });
+  
+  // Server-side Pagination states
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     fetchJobs();
-  }, []);
+  }, [currentPage]);
 
   const fetchJobs = async () => {
     try {
       setLoading(true);
-      const data = await jobsAPI.getAll({ limit: 100 });
+      const data = await jobsAPI.getAll({ limit: itemsPerPage, page: currentPage });
       setJobs(data?.jobs || []);
+      if (data?.total) {
+        setTotalPages(Math.ceil(data.total / itemsPerPage) || 1);
+      }
     } catch (error: any) {
       toast.error('Failed to load jobs');
     } finally {
@@ -172,20 +178,16 @@ const Jobs = () => {
     });
   };
 
+  // Client-side filter for search only
   const filteredJobs = jobs.filter(job => {
-    const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.company.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !searchQuery || 
+      job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.company?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = filterCategory === 'all' || job.category === filterCategory;
     return matchesSearch && matchesCategory;
   });
 
-  // Pagination
-  const totalPages = Math.ceil(filteredJobs.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
-
-  // Reset to page 1 when filters change
+  // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, filterCategory]);
@@ -410,7 +412,7 @@ const Jobs = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {paginatedJobs.map((job) => (
+              {jobs.map((job) => (
                 <div key={job._id || job.id} className="p-4 border rounded-xl hover:bg-slate-50">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -450,11 +452,11 @@ const Jobs = () => {
                   </div>
                 </div>
               ))}
-              {filteredJobs.length === 0 && (
+              {jobs.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">No jobs found</div>
               )}
             </div>
-            {filteredJobs.length > 0 && (
+            {jobs.length > 0 && totalPages > 1 && (
               <div className="p-4 border-t bg-slate-50/50">
                 <PaginationControls
                   currentPage={currentPage}

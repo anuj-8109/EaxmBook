@@ -52,10 +52,15 @@ const Questions = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('list');
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     fetchQuestions();
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     filterQuestions();
@@ -64,15 +69,20 @@ const Questions = () => {
   const fetchQuestions = async () => {
     setLoading(true);
     try {
-      const data = await questionsAPI.getAll();
+      const data = await questionsAPI.getAll({ page: currentPage, limit: itemsPerPage });
       // Handle paginated response: {questions: [...], total: 75, page: 1, limit: 50}
       // or direct array response
       if (data && Array.isArray(data)) {
         setQuestions(data);
+        setTotalPages(1);
       } else if (data && data.questions && Array.isArray(data.questions)) {
         setQuestions(data.questions);
+        if (data.total) {
+          setTotalPages(Math.ceil(data.total / itemsPerPage) || 1);
+        }
       } else {
         setQuestions([]);
+        setTotalPages(1);
       }
     } catch (error: any) {
       showError('Failed to load questions');
@@ -570,6 +580,15 @@ const Questions = () => {
                     </Card>
                   );
                 })
+              )}
+              {filteredQuestions.length > 0 && totalPages > 1 && (
+                <div className="pt-4">
+                  <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                  />
+                </div>
               )}
             </div>
           </TabsContent>

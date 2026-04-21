@@ -56,10 +56,14 @@ const Topics = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Server-side Pagination states
+  const [totalPages, setTotalPages] = useState(1);
+  const [paginatedTopics, setPaginatedTopics] = useState<Topic[]>([]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [currentPage, selectedSubject]);
 
   // Fetch subjects when category changes
   useEffect(() => {
@@ -73,7 +77,7 @@ const Topics = () => {
   const fetchData = async () => {
     try {
       const [topicsData, subjectsData, categoriesData] = await Promise.all([
-        topicsAPI.getAll(),
+        topicsAPI.getAll(selectedSubject !== 'all' ? selectedSubject : undefined, currentPage, itemsPerPage),
         subjectsAPI.getAll(),
         categoriesAPI.getAll()
       ]);
@@ -84,6 +88,12 @@ const Topics = () => {
       const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.categories || []);
 
       setTopics(topics);
+      setPaginatedTopics(topics);
+      if (topicsData?.pagination) {
+        setTotalPages(topicsData.pagination.totalPages || 1);
+      } else {
+        setTotalPages(Math.ceil(topics.length / itemsPerPage) || 1);
+      }
       setSubjects(subjects);
       setCategories(categories);
     } catch (error: any) {
@@ -191,44 +201,19 @@ const Topics = () => {
     }
   };
 
-  // Memoize filtered topics to avoid recalculating on every render
+  // Filter topics (client-side for search only, server-side for pagination)
   const filteredTopics = useMemo(() => {
-    return topics.filter(topic => {
-      // Subject filter
-      if (selectedSubject && selectedSubject !== 'all') {
-        const subId = typeof topic.subject_id === 'object'
-          ? (topic.subject_id._id || topic.subject_id.id)
-          : topic.subject_id;
-        if (subId?.toString() !== selectedSubject?.toString()) {
-          return false;
-        }
-      }
-
-      // Search filter
-      if (searchQuery) {
+    // If searching, filter locally
+    if (searchQuery) {
+      return topics.filter((topic) => {
         const query = searchQuery.toLowerCase();
-        const topicName = topic.name?.toLowerCase() || '';
-        const description = topic.description?.toLowerCase() || '';
-        const subjectName = typeof topic.subject_id === 'object'
-          ? topic.subject_id?.name?.toLowerCase() || ''
-          : '';
-
-        if (!topicName.includes(query) &&
-          !description.includes(query) &&
-          !subjectName.includes(query)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [topics, selectedSubject, searchQuery]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredTopics.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedTopics = filteredTopics.slice(startIndex, endIndex);
+        const matchesName = topic.name?.toLowerCase().includes(query);
+        const matchesDescription = topic.description?.toLowerCase().includes(query);
+        return matchesName || matchesDescription;
+      });
+    }
+    return topics;
+  }, [topics, searchQuery]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -515,7 +500,7 @@ const Topics = () => {
                         : subject && categories.find(c => (c._id || c.id)?.toString() === subject.category_id?.toString());
                       return (
                         <TableRow key={topic._id || topic.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium text-xs sm:text-sm">{index + 1}</TableCell>
+                          <TableCell className="font-medium text-xs sm:text-sm">{(currentPage - 1) * itemsPerPage + index + 1}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Tag className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
@@ -569,7 +554,7 @@ const Topics = () => {
                 </Table>
               </div>
             )}
-            {filteredTopics.length > 0 && (
+            {paginatedTopics.length > 0 && totalPages > 1 && (
               <div className="p-4 border-t bg-slate-50/50">
                 <PaginationControls
                   currentPage={currentPage}

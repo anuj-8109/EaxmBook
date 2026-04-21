@@ -72,7 +72,8 @@ const CustomPracticeSession = () => {
     try {
       let list: Question[] = [];
       if (data.mode === 'wrong') {
-        const wd = await bookmarksAPI.getWrongAnswers();
+        // Fetch all wrong answers (up to 100) for practice
+        const wd = await bookmarksAPI.getWrongAnswers(1, 100);
         const ids = wd.questionIds || [];
         if (!ids.length) { toast.error('No wrong answers found'); navigate('/practice'); return; }
         list = (await Promise.all(ids.slice(0, data.numQuestions).map((id: string) =>

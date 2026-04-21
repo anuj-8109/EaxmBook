@@ -85,7 +85,7 @@ const Users = () => {
 
    useEffect(() => {
       loadUsers();
-   }, []);
+   }, [currentPage]);
 
    useEffect(() => {
       if (!loading && pageRef.current) {

@@ -46,15 +46,19 @@ const Subjects = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Server-side Pagination states
+  const [totalPages, setTotalPages] = useState(1);
+  const [paginatedSubjects, setPaginatedSubjects] = useState<Subject[]>([]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [currentPage, selectedCategory]);
 
   const fetchData = async () => {
     try {
       const [subjectsData, categoriesData] = await Promise.all([
-        subjectsAPI.getAll(),
+        subjectsAPI.getAll(selectedCategory !== 'all' ? selectedCategory : undefined, currentPage, itemsPerPage),
         categoriesAPI.getAll()
       ]);
 
@@ -63,6 +67,12 @@ const Subjects = () => {
       const categories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.categories || []);
 
       setSubjects(subjects);
+      setPaginatedSubjects(subjects);
+      if (subjectsData?.pagination) {
+        setTotalPages(subjectsData.pagination.totalPages || 1);
+      } else {
+        setTotalPages(Math.ceil(subjects.length / itemsPerPage) || 1);
+      }
       setCategories(categories);
     } catch (error: any) {
       toast.error('Failed to load data: ' + error.message);
@@ -185,12 +195,6 @@ const Subjects = () => {
     });
   }, [subjects, selectedCategory, searchQuery]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredSubjects.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedSubjects = filteredSubjects.slice(startIndex, endIndex);
-
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -200,6 +204,7 @@ const Subjects = () => {
   const clearFilters = useCallback(() => {
     setSearchQuery('');
     setSelectedCategory('all');
+    setCurrentPage(1);
   }, []);
 
   if (loading) {
@@ -400,7 +405,7 @@ const Subjects = () => {
           <CardHeader className="p-3 sm:p-4 md:p-6">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base sm:text-lg md:text-xl">
-                Subjects ({filteredSubjects.length})
+                Subjects ({subjects.length})
               </CardTitle>
               {hasActiveFilters && (
                 <Button variant="outline" size="sm" onClick={clearFilters} className="text-xs sm:text-sm">
@@ -411,7 +416,7 @@ const Subjects = () => {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {filteredSubjects.length === 0 ? (
+            {paginatedSubjects.length === 0 ? (
               <div className="py-12 sm:py-16 text-center">
                 <div className="text-4xl sm:text-5xl md:text-6xl mb-3 sm:mb-4">📚</div>
                 <h3 className="text-base sm:text-lg font-semibold mb-2">
@@ -442,7 +447,7 @@ const Subjects = () => {
                         : categories.find(c => (c._id || c.id)?.toString() === subject.category_id?.toString());
                       return (
                         <TableRow key={subject._id || subject.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium text-xs sm:text-sm">{index + 1}</TableCell>
+                          <TableCell className="font-medium text-xs sm:text-sm">{(currentPage - 1) * itemsPerPage + index + 1}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
@@ -491,7 +496,7 @@ const Subjects = () => {
                 </Table>
               </div>
             )}
-            {filteredSubjects.length > 0 && (
+            {paginatedSubjects.length > 0 && totalPages > 1 && (
               <div className="p-4 border-t bg-slate-50/50">
                 <PaginationControls
                   currentPage={currentPage}

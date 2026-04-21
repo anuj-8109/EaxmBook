@@ -32,9 +32,9 @@ const Dashboard = () => {
       try {
         setLoading(true);
 
-        // 1. Fetch Recent Tasks (Attempts)
-        const attemptsData = await attemptsAPI.getAll();
-        const attempts = Array.isArray(attemptsData) ? attemptsData : (attemptsData?.attempts || []);
+        // 1. Fetch Recent Tasks (Attempts) - first page, limited results
+        const attemptsData = await attemptsAPI.getAll(1, 4);
+        const attempts = attemptsData.attempts || [];
         const recent = attempts.slice(0, 4).map((a: any) => ({
           title: a.test_id?.name || 'Custom Practice',
           category: a.test_id?.category_id?.name || 'General',

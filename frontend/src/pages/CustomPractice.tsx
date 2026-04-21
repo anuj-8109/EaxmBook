@@ -125,7 +125,7 @@ const CustomPractice = () => {
     try {
       const [data] = await Promise.all([
         categoriesAPI.getAll(),
-        bookmarksAPI.getWrongAnswers().then(d => setWrongAnswersCount(d.total || 0)).catch(() => { }),
+        bookmarksAPI.getWrongAnswers(1, 1).then(d => setWrongAnswersCount(d.totalQuestions || d.total || 0)).catch(() => { }),
       ]);
       setCategories(Array.isArray(data) ? data : data?.categories || []);
     } catch { toast.error('Failed to load exams'); }

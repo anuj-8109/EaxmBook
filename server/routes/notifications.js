@@ -4,14 +4,28 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Get all notifications for current user
+// Get all notifications for current user with pagination
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
     const notifications = await Notification.find({ user_id: req.user._id })
       .sort({ created_at: -1 })
-      .limit(100);
+      .skip(skip)
+      .limit(parseInt(limit));
     
-    res.json(notifications);
+    const total = await Notification.countDocuments({ user_id: req.user._id });
+    
+    res.json({
+      notifications,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
   } catch (error) {
     console.error('Get notifications error:', error);
     res.status(500).json({ error: 'Failed to fetch notifications' });

@@ -70,7 +70,7 @@ const Subscriptions = () => {
       const [subscriptionsData, categoriesData, attemptsData] = await Promise.all([
         subscriptionsAPI.getMySubscriptions(),
         categoriesAPI.getAll(),
-        attemptsAPI.getAll(),
+        attemptsAPI.getAll(1, 100), // Get first 100 attempts
       ]);
 
       setSubscribedData(subscriptionsData);
@@ -82,7 +82,8 @@ const Subscriptions = () => {
         categories = categoriesData.categories || [];
       }
       setAllCategories(Array.isArray(categories) ? categories : []);
-      setAttempts(attemptsData || []);
+      // Handle paginated response
+      setAttempts(attemptsData.attempts || attemptsData || []);
     } catch (error: any) {
       toast.error('Failed to load subscriptions: ' + error.message);
     } finally {

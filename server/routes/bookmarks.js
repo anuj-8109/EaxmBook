@@ -3,13 +3,29 @@ import Bookmark from '../models/Bookmark.js';
 
 const router = express.Router();
 
-// Get all bookmarks for current user
+// Get all bookmarks for current user with pagination
 router.get('/', async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
     const bookmarks = await Bookmark.find({ user_id: req.user._id })
       .populate('question_id')
-      .sort({ created_at: -1 });
-    res.json(bookmarks);
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    const total = await Bookmark.countDocuments({ user_id: req.user._id });
+    
+    res.json({
+      bookmarks,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
   } catch (error) {
     console.error('Get bookmarks error:', error);
     res.status(500).json({ error: 'Failed to fetch bookmarks' });
@@ -56,9 +72,12 @@ router.post('/toggle/:questionId', async (req, res) => {
   }
 });
 
-// Get wrong answers for current user
+// Get wrong answers for current user with pagination
 router.get('/wrong-answers', async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
     const TestAnswer = (await import('../models/TestAnswer.js')).default;
     const TestAttempt = (await import('../models/TestAttempt.js')).default;
 
@@ -69,7 +88,13 @@ router.get('/wrong-answers', async (req, res) => {
 
     const attemptIds = attempts.map(a => a._id);
 
-    // Get all wrong answers
+    // Get total count of wrong answers
+    const total = await TestAnswer.countDocuments({
+      attempt_id: { $in: attemptIds },
+      is_correct: false,
+    });
+
+    // Get paginated wrong answers
     const wrongAnswers = await TestAnswer.find({
       attempt_id: { $in: attemptIds },
       is_correct: false,
@@ -89,15 +114,27 @@ router.get('/wrong-answers', async (req, res) => {
           select: 'name category_id',
         },
       })
-      .sort({ created_at: -1 });
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
-    // Get unique question IDs
-    const questionIds = [...new Set(wrongAnswers.map(a => a.question_id?._id?.toString()).filter(Boolean))];
+    // Get unique question IDs (from all wrong answers, not just paginated)
+    const allWrongAnswers = await TestAnswer.find({
+      attempt_id: { $in: attemptIds },
+      is_correct: false,
+    }).select('question_id').lean();
+    const questionIds = [...new Set(allWrongAnswers.map(a => a.question_id?.toString()).filter(Boolean))];
 
     res.json({
       wrongAnswers,
       questionIds,
-      total: questionIds.length,
+      totalQuestions: questionIds.length,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
     });
   } catch (error) {
     console.error('Get wrong answers error:', error);

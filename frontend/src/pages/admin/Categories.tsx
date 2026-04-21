@@ -36,15 +36,13 @@ const Categories = () => {
 
   const pageRef = useRef<HTMLDivElement>(null);
 
-  // Pagination
-  const totalPages = Math.ceil(categories.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedCategories = categories.slice(startIndex, endIndex);
+  // Server-side Pagination states
+  const [totalPages, setTotalPages] = useState(1);
+  const [paginatedCategories, setPaginatedCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     if (!loading && pageRef.current) {
@@ -58,11 +56,17 @@ const Categories = () => {
 
   const fetchCategories = async () => {
     try {
-      const data = await categoriesAPI.getAll();
+      const data = await categoriesAPI.getAll(false, undefined, currentPage, itemsPerPage);
       // Handle new pagination response format
       const categories = Array.isArray(data) ? data : (data?.categories || []);
       const sorted = categories.sort((a: Category, b: Category) => (a.order ?? 0) - (b.order ?? 0));
       setCategories(sorted);
+      setPaginatedCategories(sorted);
+      if (data?.pagination) {
+        setTotalPages(data.pagination.totalPages || 1);
+      } else {
+        setTotalPages(Math.ceil(categories.length / itemsPerPage) || 1);
+      }
     } catch (error: any) {
       toast.error('Failed to load categories: ' + error.message);
     } finally {
@@ -246,7 +250,7 @@ const Categories = () => {
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            {categories.length === 0 ? (
+            {paginatedCategories.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center mx-auto mb-4">
                   <FolderTree className="w-10 h-10 text-violet-500" />
@@ -260,7 +264,7 @@ const Categories = () => {
             ) : (
               <div className="space-y-3">
                 {paginatedCategories.map((category, index) => {
-                  const actualIndex = startIndex + index;
+                  const actualIndex = (currentPage - 1) * itemsPerPage + index;
                   return (
                     <div
                       key={category._id || category.id}
@@ -313,7 +317,7 @@ const Categories = () => {
                 })}
               </div>
             )}
-            {categories.length > 0 && (
+            {paginatedCategories.length > 0 && totalPages > 1 && (
               <div className="p-4 border-t bg-slate-50/50">
                 <PaginationControls
                   currentPage={currentPage}

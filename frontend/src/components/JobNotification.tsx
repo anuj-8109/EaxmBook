@@ -49,7 +49,8 @@ export const JobNotification = () => {
   const checkUnreadCount = async () => {
     try {
       // Sirf ek baar call - header mount par
-      const notifications = await notificationsAPI.getAll();
+      const data = await notificationsAPI.getAll(1, 50); // Get first 50 notifications
+      const notifications = data.notifications || data || [];
       setNotificationsData(notifications); // Store for later use
       
       const jobNotifications = notifications.filter((n: any) => n.type === 'new_job' && !n.read);

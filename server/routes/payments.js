@@ -135,12 +135,28 @@ router.get('/', requireAdmin, async (req, res) => {
   }
 });
 
-// Get user's payments
+// Get user's payments with pagination
 router.get('/my-payments', authenticateToken, async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
     const payments = await Payment.find({ user_id: req.user._id })
-      .sort({ created_at: -1 });
-    res.json(payments);
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    const total = await Payment.countDocuments({ user_id: req.user._id });
+    
+    res.json({
+      payments,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
   } catch (error) {
     console.error('Get user payments error:', error);
     res.status(500).json({ error: 'Failed to fetch payments' });

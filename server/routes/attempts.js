@@ -5,13 +5,29 @@ import Test from '../models/Test.js';
 
 const router = express.Router();
 
-// Get all attempts for current user
+// Get all attempts for current user with pagination
 router.get('/', async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
     const attempts = await TestAttempt.find({ user_id: req.user._id })
       .populate('test_id')
-      .sort({ created_at: -1 });
-    res.json(attempts);
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    const total = await TestAttempt.countDocuments({ user_id: req.user._id });
+    
+    res.json({
+      attempts,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
   } catch (error) {
     console.error('Get attempts error:', error);
     res.status(500).json({ error: 'Failed to fetch attempts' });
@@ -114,15 +130,17 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Get all attempts (admin only)
+// Get all attempts (admin only) with pagination
 router.get('/admin/all', async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    // const attempts = await TestAttempt.find().sort({ created_at: -1 }).limit(5);
-    const attempts = await TestAttempt.aggregate([
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const pipeline = [
       {
         $lookup: {
           from: 'tests',
@@ -138,47 +156,62 @@ router.get('/admin/all', async (req, res) => {
         $sort: { created_at: -1 },
       },
       {
-        $limit: 5,
-      },
-      {
-        $project: {
-          _id: 1,
-          user_id: 1,
-          test_id: 1,
-          started_at: 1,
-          completed_at: 1,
-          time_taken_seconds: 1,
-          total_questions: 1,
-          correct_answers: 1,
-          wrong_answers: 1,
-          unanswered: 1,
-          score: 1,
-          created_at: 1,
-          // test: 1,
-          test_name: '$test.name',
-          test_category_id: '$test.category_id',
-          test_category_name: '$test.category_id.name',
-          test_category_icon: '$test.category_id.icon',
-          test_duration_minutes: '$test.duration_minutes',
-          test_total_marks: '$test.total_marks',
-          test_negative_marking: '$test.negative_marking',
-          test_negative_marks_per_question: '$test.negative_marks_per_question',
-          test_test_type: '$test.test_type',
-          test_difficulty_distribution: '$test.difficulty_distribution',
-          test_is_active: '$test.is_active',
-          test_created_at: '$test.created_at',
-          test_updated_at: '$test.updated_at',
-          test_created_by: '$test.created_by',
-          test_created_by_name: '$test.created_by.name',
-          test_created_by_email: '$test.created_by.email',
-          test_created_by_role: '$test.created_by.role',
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          data: [
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            {
+              $project: {
+                _id: 1,
+                user_id: 1,
+                test_id: 1,
+                started_at: 1,
+                completed_at: 1,
+                time_taken_seconds: 1,
+                total_questions: 1,
+                correct_answers: 1,
+                wrong_answers: 1,
+                unanswered: 1,
+                score: 1,
+                created_at: 1,
+                test_name: '$test.name',
+                test_category_id: '$test.category_id',
+                test_category_name: '$test.category_id.name',
+                test_category_icon: '$test.category_id.icon',
+                test_duration_minutes: '$test.duration_minutes',
+                test_total_marks: '$test.total_marks',
+                test_negative_marking: '$test.negative_marking',
+                test_negative_marks_per_question: '$test.negative_marks_per_question',
+                test_test_type: '$test.test_type',
+                test_difficulty_distribution: '$test.difficulty_distribution',
+                test_is_active: '$test.is_active',
+                test_created_at: '$test.created_at',
+                test_updated_at: '$test.updated_at',
+                test_created_by: '$test.created_by',
+                test_created_by_name: '$test.created_by.name',
+                test_created_by_email: '$test.created_by.email',
+                test_created_by_role: '$test.created_by.role',
+              },
+            },
+          ],
         },
+      },
+    ];
+
+    const result = await TestAttempt.aggregate(pipeline);
+    const attempts = result[0]?.data || [];
+    const total = result[0]?.metadata[0]?.total || 0;
+
+    res.json({
+      attempts,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / parseInt(limit))
       }
-    ]);
-
-    console.log("attempts",attempts)
-
-    res.json(attempts);
+    });
   } catch (error) {
     console.error('Get all attempts error:', error);
     res.status(500).json({ error: 'Failed to fetch attempts' });

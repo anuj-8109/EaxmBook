@@ -49,6 +49,9 @@ const Materials = () => {
   const [uploadingPDF, setUploadingPDF] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Server-side Pagination states
+  const [totalPages, setTotalPages] = useState(1);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -67,7 +70,7 @@ const Materials = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     if (formData.category_id) {
@@ -85,10 +88,13 @@ const Materials = () => {
     try {
       setLoading(true);
       const [materialsData, categoriesData] = await Promise.all([
-        materialsAPI.getAll({ limit: 100 }),
+        materialsAPI.getAll({ limit: itemsPerPage, page: currentPage }),
         categoriesAPI.getAll(false), // Get flat list, not tree
       ]);
       setMaterials(materialsData?.materials || []);
+      if (materialsData?.total) {
+        setTotalPages(Math.ceil(materialsData.total / itemsPerPage) || 1);
+      }
       // Handle new pagination response format
       let categories = [];
       if (Array.isArray(categoriesData)) {
@@ -98,7 +104,7 @@ const Materials = () => {
       }
       setCategories(Array.isArray(categories) ? categories : []);
     } catch (error: any) {
-      toast.error('Failed to load data');
+      toast.error('Failed to load materials: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -239,11 +245,6 @@ const Materials = () => {
     return matchesSearch && matchesType;
   });
 
-  // Pagination
-  const totalPages = Math.ceil(filteredMaterials.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedMaterials = filteredMaterials.slice(startIndex, endIndex);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -583,7 +584,7 @@ const Materials = () => {
           </CardHeader>
           <CardContent className="p-3 sm:p-4 md:p-6">
             <div className="space-y-3 sm:space-y-4">
-              {paginatedMaterials.map((material) => (
+              {materials.map((material) => (
                 <div key={material._id || material.id} className="p-3 sm:p-4 border rounded-lg sm:rounded-xl hover:bg-slate-50">
                   <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
                     <div className="flex-1 w-full">
@@ -644,11 +645,11 @@ const Materials = () => {
                   </div>
                 </div>
               ))}
-              {filteredMaterials.length === 0 && (
+              {materials.length === 0 && (
                 <div className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">No materials found</div>
               )}
             </div>
-            {filteredMaterials.length > 0 && (
+            {materials.length > 0 && totalPages > 1 && (
               <div className="p-4 border-t bg-slate-50/50">
                 <PaginationControls
                   currentPage={currentPage}

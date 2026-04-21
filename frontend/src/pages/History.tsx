@@ -11,6 +11,7 @@ import { attemptsAPI } from '@/lib/api';
 import { toast } from 'sonner';
 import Loader from '@/components/Loader';
 import { format, isThisWeek, isThisMonth } from 'date-fns';
+import { PaginationControls } from '@/components/PaginationControls';
 
 interface Attempt {
   _id?: string; id?: string;
@@ -90,15 +91,20 @@ const History = () => {
   const [activeTab, setActiveTab] = useState<'custom' | 'exam'>('custom');
   const [timeFilter, setTimeFilter] = useState<'All' | 'This Week' | 'This Month'>('All');
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     fetchAttempts();
-  }, []);
+  }, [currentPage]);
 
   const fetchAttempts = async () => {
     try {
-      const data = await attemptsAPI.getAll();
-      const fmt = (data || []).map((a: any) => ({
+      setLoading(true);
+      const data = await attemptsAPI.getAll(currentPage, itemsPerPage);
+      const attempts = data.attempts || data || [];
+      const fmt = attempts.map((a: any) => ({
         ...a,
         test_name: a.test_id?.name || 'Custom Practice Session',
         category_name: a.test_id?.category_id?.name || 'General Practice',
@@ -107,6 +113,9 @@ const History = () => {
         subjects: '',
       }));
       setApiAttempts(fmt);
+      if (data.pagination) {
+        setTotalPages(data.pagination.totalPages || 1);
+      }
     } catch { /* use demo */ }
     finally { setLoading(false); }
   };
@@ -210,7 +219,85 @@ const History = () => {
               No {activeTab === 'custom' ? 'custom practice' : 'exam'} sessions found.
             </div>
           )}
-          {filtered.map((a, idx) => {
+          
+          {/* Only show API results when not searching/filtering demo data */}
+          {(search || timeFilter !== 'All') ? filtered.map((a, idx) => {
+            const pct = Math.round(a.score);
+            const skipped = a.skipped ?? (a.total_questions - a.correct_answers - a.wrong_answers);
+            const qs = a.total_questions - a.correct_answers - a.wrong_answers - (a.skipped || 0);
+
+            return (
+              <div
+                key={a._id || idx}
+                className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden hover:border-green-200 hover:shadow-md transition-all"
+              >
+                <div className="p-4 flex flex-col sm:flex-row gap-4">
+                  {/* Left: details */}
+                  <div className="flex-1 min-w-0">
+                    {/* ID + date + recent badge */}
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                      <span className="text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-md">
+                        {a.session_id || (activeTab === 'custom' ? 'CP' : 'EX') + '-' + String(idx + 100)}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {format(new Date(a.completed_at), 'dd MMM yyyy')} · {formatTime(a.time_taken_seconds)}
+                      </span>
+                      {isRecent(a.completed_at) && (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 border border-orange-200">
+                          Recent
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Test name */}
+                    <h3 className="text-sm font-black text-slate-800 mb-0.5">
+                      {a.test_name || a.category_name || 'Practice Session'}
+                    </h3>
+
+                    {/* Subjects */}
+                    {a.subjects && (
+                      <p className="text-[11px] text-slate-400 mb-2 line-clamp-1">{a.subjects}</p>
+                    )}
+
+                    {/* Stats row */}
+                    <div className="flex flex-wrap gap-3 text-[11px] font-semibold">
+                      <span className="flex items-center gap-1 text-green-600">
+                        <CheckCircle2 className="w-3 h-3" /> {a.correct_answers} Correct
+                      </span>
+                      <span className="flex items-center gap-1 text-red-500">
+                        <XCircle className="w-3 h-3" /> {a.wrong_answers} Wrong
+                      </span>
+                      <span className="flex items-center gap-1 text-orange-500">
+                        <SkipForward className="w-3 h-3" /> {skipped} Skipped
+                      </span>
+                      <span className="flex items-center gap-1 text-blue-500">
+                        <HelpCircle className="w-3 h-3" /> {Math.max(0, qs)} Questions
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: score + actions */}
+                  <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 flex-shrink-0">
+                    <span className={`text-2xl font-black ${scoreColor(pct)}`}>{pct}%</span>
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => navigate('/practice/result')}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-green-600 hover:underline"
+                      >
+                        <Eye className="w-3 h-3" /> View Result
+                      </button>
+                      <button
+                        onClick={() => navigate('/practice/result')}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:underline"
+                      >
+                        <FileText className="w-3 h-3" /> Review Answers
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }) : apiAttempts.map((a, idx) => {
             const pct = Math.round(a.score);
             const skipped = a.skipped ?? (a.total_questions - a.correct_answers - a.wrong_answers);
             const qs = a.total_questions - a.correct_answers - a.wrong_answers - (a.skipped || 0);
@@ -287,6 +374,17 @@ const History = () => {
               </div>
             );
           })}
+          
+          {/* Pagination - only show when not using demo data filters */}
+          {!loading && !search && timeFilter === 'All' && (
+            <div className="pt-4">
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
         </div>
       </div>
     </UserLayout>

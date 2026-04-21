@@ -337,13 +337,25 @@ export const questionsAPI = {
 
 // Attempts API
 export const attemptsAPI = {
-  getAll: () => apiRequest('/attempts'),
+  getAll: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', String(page));
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/attempts${query}`);
+  },
   getById: (id: string) => apiRequest(`/attempts/${id}`),
   create: (data: any) => apiRequest('/attempts', {
     method: 'POST',
     body: JSON.stringify(data),
   }),
-  getAllAdmin: () => apiRequest('/attempts/admin/all'),
+  getAllAdmin: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', String(page));
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/attempts/admin/all${query}`);
+  },
 };
 
 // Feedback API
@@ -371,7 +383,13 @@ export const feedbackAPI = {
 
 // Notifications API
 export const notificationsAPI = {
-  getAll: () => apiRequest('/notifications'),
+  getAll: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', String(page));
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/notifications${query}`);
+  },
   getUnreadCount: () => apiRequest('/notifications/unread-count'),
   markAsRead: (id: string) => apiRequest(`/notifications/${id}/read`, {
     method: 'PUT',
@@ -454,7 +472,13 @@ export const paymentsAPI = {
     const query = params.toString() ? `?${params.toString()}` : '';
     return apiRequest(`/payments${query}`);
   },
-  getMyPayments: () => apiRequest('/payments/my-payments'),
+  getMyPayments: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', String(page));
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/payments/my-payments${query}`);
+  },
   verify: (id: string, data: { status: string; notes?: string }) => apiRequest(`/payments/${id}/verify`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -473,12 +497,24 @@ export const examTreeAPI = {
 
 // Bookmarks API
 export const bookmarksAPI = {
-  getAll: () => apiRequest('/bookmarks'),
+  getAll: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', String(page));
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/bookmarks${query}`);
+  },
   check: (questionId: string) => apiRequest(`/bookmarks/check/${questionId}`),
   toggle: (questionId: string) => apiRequest(`/bookmarks/toggle/${questionId}`, {
     method: 'POST',
   }),
-  getWrongAnswers: () => apiRequest('/bookmarks/wrong-answers'),
+  getWrongAnswers: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', String(page));
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/bookmarks/wrong-answers${query}`);
+  },
 };
 
 // Progress API

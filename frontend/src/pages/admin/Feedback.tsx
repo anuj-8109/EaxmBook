@@ -71,7 +71,7 @@ const AdminFeedback = () => {
 
   useEffect(() => {
     fetchFeedbacks();
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     if (!loading && pageRef.current) {

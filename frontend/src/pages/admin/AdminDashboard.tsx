@@ -3,7 +3,8 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Users, TrendingUp, AlertTriangle, MessageSquare, BarChart3, DollarSign, UserCheck, UserX, FileText, Activity, Shield, CheckCircle2, Clock, ArrowRight, Sparkles, Zap, GitBranch, HelpCircle } from 'lucide-react';
-import { dashboardAPI } from '@/lib/api';
+import { dashboardAPI, attemptsAPI } from '@/lib/api';
+import { PaginationControls } from '@/components/PaginationControls';
 import { showError } from '@/lib/sweetalert';
 import Loader from '@/components/Loader';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +18,19 @@ interface DashboardStats {
    testimonials: { pending: number };
    testDemand: Array<{ test_id: string; test_name: string; attempts: number; avgScore: number }>;
    overview: { totalTests: number; totalAttempts: number; recentAttempts: number; totalQuestions?: number; totalExams?: number };
+}
+
+interface AdminAttempt {
+   _id: string;
+   user_id: string;
+   test_name: string;
+   score: number;
+   total_questions: number;
+   correct_answers: number;
+   wrong_answers: number;
+   time_taken_seconds: number;
+   completed_at: string;
+   test_category_name?: string;
 }
 
 // Mock Data for Charts
@@ -42,13 +56,25 @@ const AdminDashboard = () => {
    const navigate = useNavigate();
    const [loading, setLoading] = useState(true);
    const [stats, setStats] = useState<DashboardStats | null>(null);
+   
+   // Recent attempts pagination
+   const [attempts, setAttempts] = useState<AdminAttempt[]>([]);
+   const [attemptsLoading, setAttemptsLoading] = useState(false);
+   const [attemptsPage, setAttemptsPage] = useState(1);
+   const [attemptsTotalPages, setAttemptsTotalPages] = useState(1);
+   const attemptsPerPage = 5;
 
    const statsRef = useRef<HTMLDivElement>(null);
    const chartsRef = useRef<HTMLDivElement>(null);
 
    useEffect(() => {
       fetchData();
+      fetchRecentAttempts();
    }, []);
+   
+   useEffect(() => {
+      fetchRecentAttempts();
+   }, [attemptsPage]);
 
    // GSAP Animations
    useEffect(() => {
@@ -83,6 +109,21 @@ const AdminDashboard = () => {
          showError('Failed to load dashboard data');
       } finally {
          setLoading(false);
+      }
+   };
+   
+   const fetchRecentAttempts = async () => {
+      try {
+         setAttemptsLoading(true);
+         const data = await attemptsAPI.getAllAdmin(attemptsPage, attemptsPerPage);
+         setAttempts(data.attempts || []);
+         if (data.pagination) {
+            setAttemptsTotalPages(data.pagination.totalPages || 1);
+         }
+      } catch (error: any) {
+         console.error('Failed to load recent attempts');
+      } finally {
+         setAttemptsLoading(false);
       }
    };
 
@@ -246,6 +287,78 @@ const AdminDashboard = () => {
                   </CardContent>
                </Card>
             </div>
+            
+            {/* Recent Attempts Section */}
+            <Card className="border-slate-100 shadow-md rounded-3xl overflow-hidden">
+               <CardHeader className="bg-slate-50 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                     <div className="p-2 bg-green-100 rounded-xl text-green-600">
+                        <Activity className="w-5 h-5" />
+                     </div>
+                     <div>
+                        <CardTitle className="text-xl">Recent Attempts</CardTitle>
+                        <CardDescription>Latest test attempts across all users</CardDescription>
+                     </div>
+                  </div>
+               </CardHeader>
+               <CardContent className="p-6">
+                  {attemptsLoading ? (
+                     <div className="py-8 flex justify-center">
+                        <Loader text="Loading attempts..." size="sm" />
+                     </div>
+                  ) : attempts.length === 0 ? (
+                     <div className="text-center py-8 text-slate-400">
+                        No recent attempts found
+                     </div>
+                  ) : (
+                     <div className="space-y-4">
+                        <div className="grid grid-cols-12 gap-4 text-sm font-semibold text-slate-500 border-b pb-2">
+                           <div className="col-span-3">Test</div>
+                           <div className="col-span-2">Category</div>
+                           <div className="col-span-2">Score</div>
+                           <div className="col-span-2">Accuracy</div>
+                           <div className="col-span-2">Time</div>
+                           <div className="col-span-1">Date</div>
+                        </div>
+                        {attempts.map((attempt) => (
+                           <div key={attempt._id} className="grid grid-cols-12 gap-4 text-sm py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 rounded-lg px-2 transition-colors">
+                              <div className="col-span-3 font-medium text-slate-700 truncate">
+                                 {attempt.test_name || 'Unknown Test'}
+                              </div>
+                              <div className="col-span-2 text-slate-500">
+                                 {attempt.test_category_name || 'General'}
+                              </div>
+                              <div className="col-span-2">
+                                 <span className={`font-semibold ${
+                                    (attempt.score / attempt.total_questions) * 100 >= 70 ? 'text-green-600' :
+                                    (attempt.score / attempt.total_questions) * 100 >= 50 ? 'text-orange-500' : 'text-red-500'
+                                 }`}>
+                                    {attempt.score}/{attempt.total_questions}
+                                 </span>
+                              </div>
+                              <div className="col-span-2 text-slate-600">
+                                 {Math.round((attempt.correct_answers / attempt.total_questions) * 100)}%
+                              </div>
+                              <div className="col-span-2 text-slate-500">
+                                 {Math.floor(attempt.time_taken_seconds / 60)}m {attempt.time_taken_seconds % 60}s
+                              </div>
+                              <div className="col-span-1 text-slate-400 text-xs">
+                                 {new Date(attempt.completed_at).toLocaleDateString()}
+                              </div>
+                           </div>
+                        ))}
+                        
+                        <div className="pt-4">
+                           <PaginationControls
+                              currentPage={attemptsPage}
+                              totalPages={attemptsTotalPages}
+                              onPageChange={setAttemptsPage}
+                           />
+                        </div>
+                     </div>
+                  )}
+               </CardContent>
+            </Card>
 
          </div>
       </AdminLayout>

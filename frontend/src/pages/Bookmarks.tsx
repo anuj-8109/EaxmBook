@@ -8,29 +8,63 @@ import { Bookmark, BookmarkCheck, Trash2, ExternalLink, FileText, Video, BookOpe
 import { bookmarksAPI, bookmarkedMaterialsAPI } from '@/lib/api';
 import { toast } from 'sonner';
 import Loader from '@/components/Loader';
+import { PaginationControls } from '@/components/PaginationControls';
 
 const Bookmarks = () => {
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
   const [expandedQs, setExpandedQs] = useState<Set<string>>(new Set());
+  
+  // Pagination for questions
+  const [questionsPage, setQuestionsPage] = useState(1);
+  const [questionsTotalPages, setQuestionsTotalPages] = useState(1);
+  const [questionsTotal, setQuestionsTotal] = useState(0);
+  
+  // Pagination for materials
+  const [materialsPage, setMaterialsPage] = useState(1);
+  const [materialsTotalPages, setMaterialsTotalPages] = useState(1);
+  const [materialsTotal, setMaterialsTotal] = useState(0);
+  
+  const itemsPerPage = 10;
+  const [activeTab, setActiveTab] = useState('questions');
 
   useEffect(() => {
-    fetchBookmarks();
-  }, []);
+    fetchQuestions();
+  }, [questionsPage]);
+  
+  useEffect(() => {
+    fetchMaterials();
+  }, [materialsPage]);
 
-  const fetchBookmarks = async () => {
+  const fetchQuestions = async () => {
     try {
       setLoading(true);
-      const [questionsData, materialsData] = await Promise.all([
-        bookmarksAPI.getAll(),
-        bookmarkedMaterialsAPI.getAll()
-      ]);
-      setQuestions(questionsData || []);
-      setMaterials(materialsData?.bookmarkedMaterials || []);
+      const data = await bookmarksAPI.getAll(questionsPage, itemsPerPage);
+      setQuestions(data.bookmarks || []);
+      if (data.pagination) {
+        setQuestionsTotalPages(data.pagination.totalPages || 1);
+        setQuestionsTotal(data.pagination.total || 0);
+      }
     } catch (error) {
       console.error('Failed to fetch bookmarks:', error);
       toast.error('Failed to load bookmarks');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const fetchMaterials = async () => {
+    try {
+      setLoading(true);
+      const data = await bookmarkedMaterialsAPI.getAll(undefined, materialsPage, itemsPerPage);
+      setMaterials(data.bookmarks || data.bookmarkedMaterials || []);
+      if (data.pagination) {
+        setMaterialsTotalPages(data.pagination.totalPages || 1);
+        setMaterialsTotal(data.pagination.total || 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch materials:', error);
     } finally {
       setLoading(false);
     }
@@ -41,6 +75,12 @@ const Bookmarks = () => {
       await bookmarksAPI.toggle(id);
       setQuestions(prev => prev.filter(q => (q._id || q.id) !== id));
       toast.success('Bookmark removed');
+      // Refresh if page becomes empty
+      if (questions.length === 1 && questionsPage > 1) {
+        setQuestionsPage(p => p - 1);
+      } else {
+        fetchQuestions();
+      }
     } catch (error) {
       toast.error('Failed to remove bookmark');
     }
@@ -51,6 +91,12 @@ const Bookmarks = () => {
       await bookmarkedMaterialsAPI.delete(id);
       setMaterials(prev => prev.filter(m => (m._id || m.id) !== id));
       toast.success('Bookmark removed');
+      // Refresh if page becomes empty
+      if (materials.length === 1 && materialsPage > 1) {
+        setMaterialsPage(p => p - 1);
+      } else {
+        fetchMaterials();
+      }
     } catch (error) {
       toast.error('Failed to remove bookmark');
     }
@@ -91,13 +137,13 @@ const Bookmarks = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="questions" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="bg-slate-100 p-1 rounded-xl h-auto mb-6">
             <TabsTrigger value="questions" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wider">
-              Questions ({questions.length})
+              Questions ({questionsTotal})
             </TabsTrigger>
             <TabsTrigger value="materials" className="rounded-lg py-2 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wider">
-              Materials ({materials.length})
+              Materials ({materialsTotal})
             </TabsTrigger>
           </TabsList>
 
@@ -195,6 +241,17 @@ const Bookmarks = () => {
                 })}
               </div>
             )}
+            
+            {/* Pagination for Questions */}
+            {!loading && questions.length > 0 && (
+              <div className="pt-4">
+                <PaginationControls
+                  currentPage={questionsPage}
+                  totalPages={questionsTotalPages}
+                  onPageChange={setQuestionsPage}
+                />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="materials" className="space-y-4 m-0 transition-all duration-300">
@@ -266,6 +323,17 @@ const Bookmarks = () => {
                     </Card>
                   );
                 })}
+              </div>
+            )}
+            
+            {/* Pagination for Materials */}
+            {!loading && materials.length > 0 && (
+              <div className="pt-4">
+                <PaginationControls
+                  currentPage={materialsPage}
+                  totalPages={materialsTotalPages}
+                  onPageChange={setMaterialsPage}
+                />
               </div>
             )}
           </TabsContent>
