@@ -1112,21 +1112,25 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 const optionImageUrl = formData[optionImageField] as string;
                 
                 // Determine if this option is marked correct based on answer type
+                const correctAnswersArray = formData.correct_answers || [];
                 const isCorrect = formData.answer_type === 'single' 
                   ? formData.correct_answer === idx
                   : formData.answer_type === 'multiple'
-                    ? formData.correct_answers.includes(idx)
+                    ? correctAnswersArray.includes(idx)
                     : false;
                 
                 const handleToggleCorrect = () => {
+                  console.log('Toggle clicked for option', idx, 'answer_type:', formData.answer_type);
                   if (formData.answer_type === 'single') {
                     setFormData(prev => ({ ...prev, correct_answer: idx }));
                   } else if (formData.answer_type === 'multiple') {
                     setFormData(prev => {
                       const currentAnswers = prev.correct_answers || [];
+                      console.log('Current answers:', currentAnswers);
                       const newAnswers = currentAnswers.includes(idx)
                         ? currentAnswers.filter(a => a !== idx)
                         : [...currentAnswers, idx];
+                      console.log('New answers:', newAnswers);
                       return { ...prev, correct_answers: newAnswers };
                     });
                   }
