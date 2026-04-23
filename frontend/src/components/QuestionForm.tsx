@@ -1062,13 +1062,19 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 <Select 
                   value={formData.answer_type} 
                   onValueChange={(val: 'single' | 'multiple' | 'none') => {
-                    setFormData(prev => ({
-                      ...prev,
-                      answer_type: val,
-                      // Reset correct answers when changing type
-                      correct_answer: val === 'single' ? null : prev.correct_answer,
-                      correct_answers: val === 'multiple' ? [] : prev.correct_answers,
-                    }));
+                    console.log('🔥 ANSWER TYPE CHANGED TO:', val);
+                    setFormData(prev => {
+                      console.log('Previous answer_type:', prev.answer_type);
+                      const newState = {
+                        ...prev,
+                        answer_type: val,
+                        // Reset correct answers when changing type
+                        correct_answer: val === 'single' ? null : prev.correct_answer,
+                        correct_answers: val === 'multiple' ? [] : prev.correct_answers,
+                      };
+                      console.log('New state answer_type:', newState.answer_type);
+                      return newState;
+                    });
                   }}
                 >
                   <SelectTrigger className={`w-44 rounded-lg font-medium ${
@@ -1076,7 +1082,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                     formData.answer_type === 'none' ? 'bg-gray-100 text-gray-700 border-gray-300' :
                     'bg-green-100 text-green-700 border-green-300'
                   }`}>
-                    <SelectValue />
+                    <SelectValue placeholder="Select type..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="single" className="text-green-700">✓ Single Answer</SelectItem>
@@ -1084,6 +1090,23 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                     <SelectItem value="none" className="text-gray-700">✗ No Answer</SelectItem>
                   </SelectContent>
                 </Select>
+                {/* DEBUG: Direct toggle button */}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    console.log('🚨 FORCE CHANGING TO MULTIPLE');
+                    setFormData(prev => ({
+                      ...prev,
+                      answer_type: 'multiple',
+                      correct_answers: [],
+                    }));
+                  }}
+                  className="text-xs bg-blue-100 border-blue-300 text-blue-700"
+                >
+                  FORCE: Multiple Mode
+                </Button>
               </div>
             </div>
 
@@ -1095,8 +1118,8 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 </p>
               )}
               {formData.answer_type === 'multiple' && (
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Multiple Answers:</span> Select all correct options. Multiple options can be correct.
+                <p className="text-xs text-blue-600 font-medium">
+                  ✓✓ Multiple Answers Mode: You can select multiple correct options (A, B, C, D together!)
                 </p>
               )}
               {formData.answer_type === 'none' && (
@@ -1104,6 +1127,10 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                   <span className="font-medium text-foreground">No Answer:</span> This question has no correct answer (e.g., survey or opinion question).
                 </p>
               )}
+              {/* Debug Status */}
+              <p className="text-[10px] text-gray-400 mt-1">
+                Current Mode: {formData.answer_type} | Selected: {formData.correct_answers?.length || 0} answers
+              </p>
             </div>
             
             <div className="space-y-4">
