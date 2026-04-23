@@ -51,10 +51,32 @@ const questionSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  // Answer type: single (one correct), multiple (multiple correct), none (no correct answer)
+  answer_type: {
+    type: String,
+    enum: ['single', 'multiple', 'none'],
+    default: 'single',
+  },
+  // Single correct answer (for backward compatibility and single answer type)
   correct_answer: {
     type: Number,
-    required: true,
+    required: function() {
+      return this.answer_type === 'single';
+    },
     enum: [0, 1, 2, 3, 4], // 0=A, 1=B, 2=C, 3=D, 4=X
+    default: null,
+  },
+  // Multiple correct answers (for multiple answer type)
+  correct_answers: {
+    type: [Number],
+    default: [],
+    validate: {
+      validator: function(answers) {
+        if (this.answer_type !== 'multiple') return true;
+        return answers && answers.length >= 1;
+      },
+      message: 'At least one correct answer is required for multiple answer type'
+    }
   },
   hint: {
     type: String,

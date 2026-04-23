@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, FileText, Upload, Download, Search, Video, BookOpen, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, FileText, Upload, Download, Search, Video, BookOpen, X, Trash } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { materialsAPI, categoriesAPI, subjectsAPI, topicsAPI, uploadAPI } from '@/lib/api';
 import Loader from '@/components/Loader';
@@ -52,6 +53,9 @@ const Materials = () => {
   
   // Server-side Pagination states
   const [totalPages, setTotalPages] = useState(1);
+  
+  // Multi-select states
+  const [selectedMaterials, setSelectedMaterials] = useState<Set<string>>(new Set());
 
   const [formData, setFormData] = useState({
     title: '',
@@ -214,9 +218,45 @@ const Materials = () => {
       toast.success('Material deleted successfully!');
       fetchData();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to delete material');
+      toast.error('Error: ' + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Multi-select handlers
+  const handleSelectMaterial = (id: string) => {
+    setSelectedMaterials(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedMaterials.size === materials.length) {
+      setSelectedMaterials(new Set());
+    } else {
+      const allIds = materials.map(m => m._id || m.id).filter(Boolean) as string[];
+      setSelectedMaterials(new Set(allIds));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedMaterials.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedMaterials.size} materials?`)) return;
+
+    try {
+      await materialsAPI.batchDelete(Array.from(selectedMaterials));
+      toast.success(`${selectedMaterials.size} materials deleted successfully!`);
+      setSelectedMaterials(new Set());
+      fetchData();
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
     }
   };
 
@@ -555,8 +595,21 @@ const Materials = () => {
         <Card className="border border-border/70 rounded-xl sm:rounded-[1.5rem] shadow-lg">
           <CardHeader className="p-3 sm:p-4 md:p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-              <CardTitle className="text-base sm:text-lg md:text-xl">All Materials</CardTitle>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={materials.length > 0 && selectedMaterials.size === materials.length}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="Select all materials"
+                />
+                <CardTitle className="text-base sm:text-lg md:text-xl">All Materials</CardTitle>
+              </div>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                {selectedMaterials.size > 0 && (
+                  <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs sm:text-sm">
+                    <Trash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Delete ({selectedMaterials.size})
+                  </Button>
+                )}
                 <Select value={filterType} onValueChange={setFilterType}>
                   <SelectTrigger className="w-full sm:w-32 text-xs sm:text-sm">
                     <SelectValue />
@@ -584,9 +637,18 @@ const Materials = () => {
           </CardHeader>
           <CardContent className="p-3 sm:p-4 md:p-6">
             <div className="space-y-3 sm:space-y-4">
-              {materials.map((material) => (
-                <div key={material._id || material.id} className="p-3 sm:p-4 border rounded-lg sm:rounded-xl hover:bg-slate-50">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
+              {materials.map((material) => {
+                const materialId = material._id || material.id || '';
+                return (
+                <div key={materialId} className={`p-3 sm:p-4 border rounded-lg sm:rounded-xl hover:bg-slate-50 ${selectedMaterials.has(materialId) ? 'border-red-300 bg-red-50/30' : ''}`}>
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={selectedMaterials.has(materialId)}
+                      onCheckedChange={() => handleSelectMaterial(materialId)}
+                      aria-label={`Select ${material.title}`}
+                    />
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4 flex-1">
                     <div className="flex-1 w-full">
                       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
                         {material.material_type === 'pdf' && <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-red-500 flex-shrink-0" />}
@@ -644,7 +706,7 @@ const Materials = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
               {materials.length === 0 && (
                 <div className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">No materials found</div>
               )}

@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X, Trash } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { showError, showSuccess, showWarning, showInfo, showDeleteConfirm } from '@/lib/sweetalert';
 import { questionsAPI } from '@/lib/api';
 import { AdminPageHeading } from '@/components/AdminPageHeading';
@@ -30,7 +31,9 @@ interface Question {
   option_c: string;
   option_d: string;
   option_x?: string;
-  correct_answer: number;
+  answer_type?: 'single' | 'multiple' | 'none';
+  correct_answer?: number;
+  correct_answers?: number[];
   hint?: string;
   explanation?: string;
   exam_names?: string[];
@@ -57,6 +60,9 @@ const Questions = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
+  
+  // Multi-select states
+  const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchQuestions();
@@ -149,16 +155,48 @@ const Questions = () => {
     const result = await showDeleteConfirm('this question');
     if (!result.isConfirmed) return;
 
-    setLoading(true);
     try {
       await questionsAPI.delete(questionId);
       showSuccess('Question deleted successfully!');
       fetchQuestions();
     } catch (error: any) {
-      showError(error.message || 'Failed to delete question');
-      console.error(error);
-    } finally {
-      setLoading(false);
+      showError('Failed to delete question', error.message);
+    }
+  };
+
+  const handleSelectQuestion = (id: string) => {
+    setSelectedQuestions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedQuestions.size === filteredQuestions.length) {
+      setSelectedQuestions(new Set());
+    } else {
+      const allIds = filteredQuestions.map(q => q._id || q.id).filter(Boolean) as string[];
+      setSelectedQuestions(new Set(allIds));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedQuestions.size === 0) return;
+    const result = await showDeleteConfirm(`${selectedQuestions.size} questions`);
+    if (!result.isConfirmed) return;
+
+    try {
+      await questionsAPI.batchDelete(Array.from(selectedQuestions));
+      showSuccess(`${selectedQuestions.size} questions deleted successfully!`);
+      setSelectedQuestions(new Set());
+      fetchQuestions();
+    } catch (error: any) {
+      showError('Failed to delete questions', error.message);
     }
   };
 
@@ -301,6 +339,15 @@ const Questions = () => {
     return labels[index] || '?';
   };
 
+  // Helper to check if an option is correct based on answer type
+  const isOptionCorrect = (question: Question, optIdx: number): boolean => {
+    if (question.answer_type === 'none') return false;
+    if (question.answer_type === 'multiple' && question.correct_answers) {
+      return question.correct_answers.includes(optIdx);
+    }
+    return question.correct_answer === optIdx;
+  };
+
   const getDifficultyColor = (level?: number) => {
     if (!level) return 'bg-muted';
     if (level <= 3) return 'bg-green-500/10 text-green-600';
@@ -401,9 +448,22 @@ const Questions = () => {
             {/* Questions List */}
             <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xs sm:text-sm md:text-base font-semibold uppercase tracking-wide text-muted-foreground">
-                  Questions ({filteredQuestions.length})
-                </h2>
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    checked={filteredQuestions.length > 0 && selectedQuestions.size === filteredQuestions.length}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Select all questions"
+                  />
+                  <h2 className="text-xs sm:text-sm md:text-base font-semibold uppercase tracking-wide text-muted-foreground">
+                    Questions ({filteredQuestions.length})
+                  </h2>
+                </div>
+                {selectedQuestions.size > 0 && (
+                  <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs sm:text-sm">
+                    <Trash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Delete ({selectedQuestions.size})
+                  </Button>
+                )}
               </div>
 
               {loading ? (
@@ -426,6 +486,7 @@ const Questions = () => {
                 </Card>
               ) : (
                 filteredQuestions.map((question, idx) => {
+                  const questionId = question._id || question.id || '';
                   const options = [
                     question.option_a,
                     question.option_b,
@@ -435,21 +496,42 @@ const Questions = () => {
                   ];
                   return (
                     <Card
-                      key={question._id || question.id}
-                      className="rounded-xl sm:rounded-[1.5rem] border border-border/70 hover:-translate-y-0.5 hover:shadow-xl transition"
+                      key={questionId}
+                      className={`rounded-xl sm:rounded-[1.5rem] border hover:-translate-y-0.5 hover:shadow-xl transition ${selectedQuestions.has(questionId) ? 'border-red-300 bg-red-50/30' : 'border-border/70'}`}
                     >
                       <CardContent className="p-3 sm:p-4 md:p-5 space-y-2 sm:space-y-3">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
-                          <div className="flex-1 w-full">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedQuestions.has(questionId)}
+                            onCheckedChange={() => handleSelectQuestion(questionId)}
+                            aria-label={`Select question ${idx + 1}`}
+                          />
+                          <div className="flex-1">
                             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
                               <h3 className="font-semibold text-xs sm:text-sm md:text-base break-words flex-1 min-w-0">
-                                Q{idx + 1}. {question.question_text}
+                                Q{(currentPage - 1) * itemsPerPage + idx + 1}. {question.question_text}
                               </h3>
                               {question.difficulty_level && (
                                 <Badge className={`rounded-full text-[10px] sm:text-xs flex-shrink-0 ${getDifficultyColor(question.difficulty_level)}`}>
                                   Level {question.difficulty_level}
                                 </Badge>
                               )}
+                              <Badge 
+                                variant="outline" 
+                                className={`rounded-full text-[10px] sm:text-xs flex-shrink-0 ${
+                                  question.answer_type === 'multiple' 
+                                    ? 'border-blue-400 text-blue-600 bg-blue-50' 
+                                    : question.answer_type === 'none'
+                                      ? 'border-gray-400 text-gray-600 bg-gray-50'
+                                      : 'border-green-400 text-green-600 bg-green-50'
+                                }`}
+                              >
+                                {question.answer_type === 'multiple' 
+                                  ? 'Multi Answer' 
+                                  : question.answer_type === 'none' 
+                                    ? 'No Answer' 
+                                    : 'Single Answer'}
+                              </Badge>
                             </div>
                             {question.question_text_hindi && (
                               <p className="text-xs sm:text-sm text-muted-foreground mb-2 break-words">
@@ -504,7 +586,7 @@ const Questions = () => {
                                         opt && (
                                           <div
                                             key={optIdx}
-                                            className={`rounded-lg sm:rounded-xl border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm break-words ${optIdx === question.correct_answer
+                                            className={`rounded-lg sm:rounded-xl border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm break-words ${isOptionCorrect(question, optIdx)
                                                 ? 'border-success bg-success/10'
                                                 : 'border-border bg-muted/60'
                                               }`}
@@ -513,8 +595,10 @@ const Questions = () => {
                                               {getOptionLabel(optIdx)}.
                                             </span>
                                             {opt}
-                                            {optIdx === question.correct_answer && (
-                                              <span className="ml-1 sm:ml-2 text-success font-semibold text-[10px] sm:text-xs">✓ Correct</span>
+                                            {isOptionCorrect(question, optIdx) && (
+                                              <span className="ml-1 sm:ml-2 text-success font-semibold text-[10px] sm:text-xs">
+                                                ✓ {question.answer_type === 'multiple' ? 'Correct' : 'Correct'}
+                                              </span>
                                             )}
                                             {optIdx === 4 && (
                                               <Badge variant="outline" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">Hidden</Badge>
@@ -562,14 +646,14 @@ const Questions = () => {
                             option && (
                               <div
                                 key={optIdx}
-                                className={`rounded-lg sm:rounded-xl border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm break-words ${optIdx === question.correct_answer
+                                className={`rounded-lg sm:rounded-xl border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm break-words ${isOptionCorrect(question, optIdx)
                                     ? 'border-success bg-success/10'
                                     : 'border-border bg-muted/60'
                                   }`}
                               >
                                 <span className="font-semibold mr-1 sm:mr-2">{getOptionLabel(optIdx)}.</span>
                                 {option}
-                                {optIdx === question.correct_answer && (
+                                {isOptionCorrect(question, optIdx) && (
                                   <span className="ml-1 sm:ml-2 text-success font-semibold text-[10px] sm:text-xs">✓</span>
                                 )}
                               </div>
@@ -622,7 +706,9 @@ const Questions = () => {
                   option_d_hindi: '',
                   option_x: editingQuestion.option_x || '',
                   option_x_hindi: '',
-                  correct_answer: editingQuestion.correct_answer || 0,
+                  answer_type: editingQuestion.answer_type || 'single',
+                  correct_answer: editingQuestion.correct_answer ?? null,
+                  correct_answers: editingQuestion.correct_answers || [],
                   hint: editingQuestion.hint || '',
                   hint_hindi: '',
                   explanation: editingQuestion.explanation || '',

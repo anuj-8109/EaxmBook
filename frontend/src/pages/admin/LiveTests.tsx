@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Clock, FileText, X, Link, Search, Filter, AlertCircle, CheckCircle2, DollarSign, BookOpen, Award, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Plus, Pencil, Trash2, Clock, FileText, X, Link, Search, Filter, AlertCircle, CheckCircle2, DollarSign, BookOpen, Award, ChevronLeft, ChevronRight, Calendar, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { showError, showSuccess, showWarning, showInfo, showDeleteConfirm } from '@/lib/sweetalert';
 import { categoriesAPI, testsAPI, subjectsAPI, aiAPI } from '@/lib/api';
@@ -16,6 +16,7 @@ import { Bot, Loader2 } from 'lucide-react';
 import { AdminPageHeading } from '@/components/AdminPageHeading';
 import { PaginationControls } from '@/components/PaginationControls';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Category {
    _id?: string;
@@ -88,6 +89,9 @@ const AdminLiveTests = () => {
    const [showFilters, setShowFilters] = useState(false);
    const [generating, setGenerating] = useState(false);
    const [aiLoading, setAiLoading] = useState(false);
+
+   // Multi-select states
+   const [selectedTests, setSelectedTests] = useState<Set<string>>(new Set());
 
    const [formData, setFormData] = useState({
       name: '',
@@ -365,6 +369,47 @@ const AdminLiveTests = () => {
          fetchData();
       } catch (error: any) {
          showError("Failed to delete test", error.message);
+      } finally {
+         setLoading(false);
+      }
+   };
+
+   const handleSelectTest = (id: string) => {
+      setSelectedTests(prev => {
+         const newSet = new Set(prev);
+         if (newSet.has(id)) {
+            newSet.delete(id);
+         } else {
+            newSet.add(id);
+         }
+         return newSet;
+      });
+   };
+
+   const handleSelectAll = () => {
+      if (selectedTests.size === filteredTests.length) {
+         setSelectedTests(new Set());
+      } else {
+         const allIds = filteredTests.map(t => t._id || t.id).filter(Boolean) as string[];
+         setSelectedTests(new Set(allIds));
+      }
+   };
+
+   const handleBatchDelete = async () => {
+      if (selectedTests.size === 0) return;
+      const result = await showDeleteConfirm(`${selectedTests.size} tests`);
+      if (!result.isConfirmed) return;
+
+      setLoading(true);
+      try {
+         // Delete tests one by one since API might not support batch delete
+         const deletePromises = Array.from(selectedTests).map(id => testsAPI.delete(id));
+         await Promise.all(deletePromises);
+         showSuccess(`${selectedTests.size} tests deleted successfully!`);
+         setSelectedTests(new Set());
+         fetchData();
+      } catch (error: any) {
+         showError('Failed to delete tests', error.message);
       } finally {
          setLoading(false);
       }
@@ -1175,12 +1220,25 @@ const AdminLiveTests = () => {
                )}
             </div>
 
-            {/* Tests Count */}
+            {/* Tests Count and Multi-select Actions */}
             <div className="flex items-center justify-between flex-wrap gap-2">
-               <p className="text-xs sm:text-sm text-muted-foreground">
-                  Showing <span className="font-semibold text-foreground">{filteredTests.length}</span> of <span className="font-semibold text-foreground">{totalTests}</span> test(s)
-                  {hasActiveFilters && <span className="ml-1">(filtered)</span>}
-               </p>
+               <div className="flex items-center gap-3">
+                  <Checkbox
+                     checked={filteredTests.length > 0 && selectedTests.size === filteredTests.length}
+                     onCheckedChange={handleSelectAll}
+                     aria-label="Select all tests"
+                  />
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                     Showing <span className="font-semibold text-foreground">{filteredTests.length}</span> of <span className="font-semibold text-foreground">{totalTests}</span> test(s)
+                     {hasActiveFilters && <span className="ml-1">(filtered)</span>}
+                  </p>
+                  {selectedTests.size > 0 && (
+                     <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs">
+                        <Trash className="h-3 w-3 mr-1" />
+                        Delete ({selectedTests.size})
+                     </Button>
+                  )}
+               </div>
                {totalPages > 1 && (
                   <div className="flex items-center gap-2">
                      <Label className="text-xs sm:text-sm">Items per page:</Label>
@@ -1225,6 +1283,7 @@ const AdminLiveTests = () => {
                   </Card>
                ) : (
                   filteredTests.map((test) => {
+                     const testId = test._id || test.id || '';
                      const catId =
                         typeof test.category_id === "object" && test.category_id !== null
                            ? test.category_id._id || test.category_id.id
@@ -1237,14 +1296,22 @@ const AdminLiveTests = () => {
 
                      return (
                         <Card
-                           key={test._id || test.id}
-                           className={`rounded-[1.5rem] border transition-all duration-300 ${test.is_active
+                           key={testId}
+                           className={`rounded-[1.5rem] border transition-all duration-300 ${selectedTests.has(testId) ? 'border-red-300 bg-red-50/30' : test.is_active
                                  ? 'border-border/70 hover:border-primary/30 hover:shadow-xl hover:-translate-y-0.5'
                                  : 'border-border/40 opacity-75 hover:opacity-100'
                               }`}
                         >
                            <CardContent className="p-6">
                               <div className="flex flex-col lg:flex-row gap-6">
+                                 {/* Checkbox Column */}
+                                 <div className="flex items-start pt-1">
+                                    <Checkbox
+                                       checked={selectedTests.has(testId)}
+                                       onCheckedChange={() => handleSelectTest(testId)}
+                                       aria-label={`Select test ${test.name}`}
+                                    />
+                                 </div>
                                  {/* Left Section - Main Content */}
                                  <div className="flex-1 space-y-4">
                                     {/* Header with Title and Badges */}
@@ -1428,7 +1495,7 @@ const AdminLiveTests = () => {
                                              size="sm"
                                              variant="outline"
                                              className="rounded-xl border-destructive/40 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                             onClick={() => handleDelete(test._id || test.id)}
+                                             onClick={() => handleDelete(testId)}
                                           >
                                              <Trash2 className="h-4 w-4" />
                                           </Button>

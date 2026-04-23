@@ -355,7 +355,9 @@ interface QuestionFormData {
   option_d_hindi: string;
   option_x: string;
   option_x_hindi: string;
-  correct_answer: number;
+  answer_type: 'single' | 'multiple' | 'none';
+  correct_answer: number | null;
+  correct_answers: number[];
   hint: string;
   hint_hindi: string;
   explanation: string;
@@ -387,6 +389,8 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
   const [uploadingImage, setUploadingImage] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [showHindi, setShowHindi] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<QuestionFormData>({
     exam_names: [],
@@ -408,7 +412,9 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     option_d_hindi: '',
     option_x: '',
     option_x_hindi: '',
+    answer_type: 'single',
     correct_answer: 0,
+    correct_answers: [],
     hint: '',
     hint_hindi: '',
     explanation: '',
@@ -429,6 +435,32 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     fetchData();
   }, []);
 
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('=== QuestionForm State ===');
+    console.log('Categories:', categories.length, categories);
+    console.log('Subjects:', subjects.length, subjects);
+    console.log('Topics:', topics.length, topics);
+    console.log('Selected Category:', selectedCategoryId);
+    console.log('========================');
+  }, [categories, subjects, topics, selectedCategoryId]);
+
+  // Normalize initialData for backward compatibility with old questions
+  useEffect(() => {
+    if (initialData) {
+      // If old question doesn't have answer_type, determine it from correct_answer
+      if (!initialData.answer_type) {
+        const hasCorrectAnswer = initialData.correct_answer !== undefined && initialData.correct_answer !== null;
+        const normalizedAnswerType = hasCorrectAnswer ? 'single' : 'none';
+        setFormData(prev => ({
+          ...prev,
+          answer_type: normalizedAnswerType,
+          correct_answers: hasCorrectAnswer ? [initialData.correct_answer as number] : [],
+        }));
+      }
+    }
+  }, [initialData]);
+
   useEffect(() => {
     if (initialData?.category_ids && initialData.category_ids.length > 0) {
       setSelectedCategoryId(initialData.category_ids[0]);
@@ -448,29 +480,49 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     }
   }, [selectedCategoryId]);
 
+  // Helper to normalize API response (handles both array and paginated object)
+  const normalizeArrayData = (data: any, fieldName: string): any[] => {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data[fieldName])) return data[fieldName];
+    if (data && data.data && Array.isArray(data.data)) return data.data;
+    return [];
+  };
+
   const fetchAllSubjects = async () => {
     try {
       const subs = await subjectsAPI.getAll();
-      if (Array.isArray(subs)) {
-        setSubjects(subs);
-      }
+      console.log('Fetched all subjects:', subs);
+      const normalizedSubs = normalizeArrayData(subs, 'subjects');
+      console.log('Normalized subjects:', normalizedSubs.length);
+      setSubjects(normalizedSubs);
     } catch (error: any) {
-      console.error('Failed to load subjects');
+      console.error('Failed to load subjects:', error);
+      toast.error('Failed to load subjects: ' + (error.message || 'Unknown error'));
     }
   };
 
   const fetchData = async () => {
+    setDataLoading(true);
+    setDataError(null);
     try {
       const [catsData, topsData, subsData] = await Promise.all([
         categoriesAPI.getAll(true),
         topicsAPI.getAll(),
         subjectsAPI.getAll(), // Fetch all subjects initially
       ]);
-      setCategories(catsData || []);
-      setTopics(topsData || []);
-      if (Array.isArray(subsData)) {
-        setSubjects(subsData);
-      }
+      console.log('Fetched categories:', catsData);
+      console.log('Fetched topics:', topsData);
+      console.log('Fetched subjects:', subsData);
+      
+      const normalizedCats = normalizeArrayData(catsData, 'categories');
+      const normalizedTopics = normalizeArrayData(topsData, 'topics');
+      const normalizedSubjects = normalizeArrayData(subsData, 'subjects');
+      
+      console.log('Normalized:', { cats: normalizedCats.length, topics: normalizedTopics.length, subjects: normalizedSubjects.length });
+      
+      setCategories(normalizedCats);
+      setTopics(normalizedTopics);
+      setSubjects(normalizedSubjects);
       
       // Flatten categories
       const flat: Array<{ id: string; name: string; icon?: string }> = [];
@@ -488,19 +540,35 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
       };
       flatten(catsData || []);
       setAllCategoriesFlat(flat);
+      
+      if (!catsData || catsData.length === 0) {
+        toast.warning('No categories found');
+      }
+      if (!subsData || subsData.length === 0) {
+        toast.warning('No subjects found');
+      }
+      if (!topsData || topsData.length === 0) {
+        toast.warning('No topics found');
+      }
     } catch (error: any) {
-      toast.error('Failed to load form data');
+      console.error('Failed to load form data:', error);
+      setDataError(error.message || 'Failed to load data');
+      toast.error('Failed to load form data: ' + (error.message || 'Unknown error'));
+    } finally {
+      setDataLoading(false);
     }
   };
 
   const fetchSubjectsForCategory = async (catId: string) => {
     try {
       const subs = await subjectsAPI.getAll(catId);
-      if (Array.isArray(subs)) {
-        setSubjects(subs);
-      }
+      console.log('Fetched subjects for category', catId, ':', subs);
+      const normalizedSubs = normalizeArrayData(subs, 'subjects');
+      console.log('Normalized subjects for category:', normalizedSubs.length);
+      setSubjects(normalizedSubs);
     } catch (error: any) {
-      console.error('Failed to load subjects');
+      console.error('Failed to load subjects for category:', error);
+      toast.error('Failed to load subjects: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -557,6 +625,21 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     }
     
     // Exam Category is now optional, so we don't validate it
+    
+    // Validate correct answer based on answer_type
+    if (formData.answer_type === 'single') {
+      if (formData.correct_answer === null || formData.correct_answer === undefined) {
+        toast.error('Please select a correct answer for single answer type');
+        return;
+      }
+    } else if (formData.answer_type === 'multiple') {
+      if (!formData.correct_answers || formData.correct_answers.length === 0) {
+        toast.error('Please select at least one correct answer for multiple answer type');
+        return;
+      }
+    }
+    // 'none' type doesn't require any correct answer
+    
     await onSubmit(formData);
   };
 
@@ -702,10 +785,24 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                     <SelectValue placeholder="Select subject (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    {subjects.length === 0 && (
-                      <div className="py-6 px-2 text-center text-sm text-muted-foreground">No subjects available</div>
+                    {dataLoading && (
+                      <div className="py-6 px-2 text-center text-sm text-muted-foreground">
+                        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        Loading subjects...
+                      </div>
                     )}
-                    {subjects.map(sub => (
+                    {!dataLoading && dataError && (
+                      <div className="py-6 px-2 text-center text-sm text-red-500">
+                        Error: {dataError}
+                      </div>
+                    )}
+                    {!dataLoading && !dataError && subjects.length === 0 && (
+                      <div className="py-6 px-2 text-center text-sm text-muted-foreground">
+                        No subjects available<br/>
+                        <span className="text-xs">Please create subjects in Admin → Subjects</span>
+                      </div>
+                    )}
+                    {!dataLoading && subjects.map(sub => (
                       <SelectItem key={sub._id || sub.id} value={(sub._id || sub.id) as string}>
                         {sub.name}
                       </SelectItem>
@@ -727,12 +824,24 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                     <SelectValue placeholder={formData.subject_ids.length > 0 ? "Select topic" : "Select subject first"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredTopics.length === 0 && formData.subject_ids.length > 0 && (
+                    {dataLoading && (
                       <div className="py-6 px-2 text-center text-sm text-muted-foreground">
-                        No topics available for this subject. Please create topics in Admin → Topics first.
+                        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        Loading topics...
                       </div>
                     )}
-                    {filteredTopics.map(topic => (
+                    {!dataLoading && dataError && (
+                      <div className="py-6 px-2 text-center text-sm text-red-500">
+                        Error: {dataError}
+                      </div>
+                    )}
+                    {!dataLoading && !dataError && filteredTopics.length === 0 && formData.subject_ids.length > 0 && (
+                      <div className="py-6 px-2 text-center text-sm text-muted-foreground">
+                        No topics available for this subject.<br/>
+                        <span className="text-xs">Please create topics in Admin → Topics</span>
+                      </div>
+                    )}
+                    {!dataLoading && filteredTopics.map(topic => (
                       <SelectItem key={topic._id || topic.id} value={(topic._id || topic.id) as string}>
                         {topic.name}
                       </SelectItem>
@@ -942,9 +1051,59 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
 
           {/* Options Section */}
           <div className="space-y-4 pt-4 border-t">
-            <div className="flex items-center gap-2 pb-2">
-              <h3 className="text-base font-semibold">Options (Optional)</h3>
-              <span className="text-xs text-muted-foreground">Click to mark correct answer</span>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold">Options (Optional)</h3>
+              </div>
+              
+              {/* Answer Type Selector */}
+              <div className="flex items-center gap-2 bg-muted/50 px-3 py-2 rounded-xl border border-border/50">
+                <Label className="text-sm font-semibold text-foreground">Answer Type:</Label>
+                <Select 
+                  value={formData.answer_type} 
+                  onValueChange={(val: 'single' | 'multiple' | 'none') => {
+                    setFormData(prev => ({
+                      ...prev,
+                      answer_type: val,
+                      // Reset correct answers when changing type
+                      correct_answer: val === 'single' ? null : prev.correct_answer,
+                      correct_answers: val === 'multiple' ? [] : prev.correct_answers,
+                    }));
+                  }}
+                >
+                  <SelectTrigger className={`w-44 rounded-lg font-medium ${
+                    formData.answer_type === 'multiple' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                    formData.answer_type === 'none' ? 'bg-gray-100 text-gray-700 border-gray-300' :
+                    'bg-green-100 text-green-700 border-green-300'
+                  }`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single" className="text-green-700">✓ Single Answer</SelectItem>
+                    <SelectItem value="multiple" className="text-blue-700">✓✓ Multiple Answers</SelectItem>
+                    <SelectItem value="none" className="text-gray-700">✗ No Answer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Answer Type Description */}
+            <div className="p-3 rounded-xl bg-muted/50 border border-border/30">
+              {formData.answer_type === 'single' && (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Single Answer:</span> Select one correct option from A, B, C, D, or X.
+                </p>
+              )}
+              {formData.answer_type === 'multiple' && (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Multiple Answers:</span> Select all correct options. Multiple options can be correct.
+                </p>
+              )}
+              {formData.answer_type === 'none' && (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">No Answer:</span> This question has no correct answer (e.g., survey or opinion question).
+                </p>
+              )}
             </div>
             
             <div className="space-y-4">
@@ -952,22 +1111,48 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 const optionImageField = `${opt.field}_image_url` as keyof QuestionFormData;
                 const optionImageUrl = formData[optionImageField] as string;
                 
+                // Determine if this option is marked correct based on answer type
+                const isCorrect = formData.answer_type === 'single' 
+                  ? formData.correct_answer === idx
+                  : formData.answer_type === 'multiple'
+                    ? formData.correct_answers.includes(idx)
+                    : false;
+                
+                const handleToggleCorrect = () => {
+                  if (formData.answer_type === 'single') {
+                    setFormData(prev => ({ ...prev, correct_answer: idx }));
+                  } else if (formData.answer_type === 'multiple') {
+                    setFormData(prev => {
+                      const currentAnswers = prev.correct_answers || [];
+                      const newAnswers = currentAnswers.includes(idx)
+                        ? currentAnswers.filter(a => a !== idx)
+                        : [...currentAnswers, idx];
+                      return { ...prev, correct_answers: newAnswers };
+                    });
+                  }
+                };
+                
                 return (
-                  <div key={opt.key} className="space-y-2 p-4 border border-border/50 rounded-xl bg-muted/30">
+                  <div key={opt.key} className={`space-y-2 p-4 border rounded-xl bg-muted/30 transition-colors ${isCorrect ? 'border-green-500/50 bg-green-50/30' : 'border-border/50'}`}>
                     <div className="flex items-center justify-between">
                       <Label htmlFor={opt.field} className="font-medium">
                         Option {opt.label} (Optional)
                       </Label>
-                      <Button
-                        type="button"
-                        variant={formData.correct_answer === idx ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setFormData(prev => ({ ...prev, correct_answer: idx }))}
-                        className="rounded-xl"
-                      >
-                        <CheckCircle2 className={`h-4 w-4 mr-1 ${formData.correct_answer === idx ? '' : 'opacity-50'}`} />
-                        {formData.correct_answer === idx ? 'Correct' : 'Mark Correct'}
-                      </Button>
+                      {formData.answer_type !== 'none' && (
+                        <Button
+                          type="button"
+                          variant={isCorrect ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={handleToggleCorrect}
+                          className="rounded-xl"
+                        >
+                          <CheckCircle2 className={`h-4 w-4 mr-1 ${isCorrect ? '' : 'opacity-50'}`} />
+                          {isCorrect 
+                            ? (formData.answer_type === 'multiple' ? 'Selected' : 'Correct')
+                            : (formData.answer_type === 'multiple' ? 'Select' : 'Mark Correct')
+                          }
+                        </Button>
+                      )}
                     </div>
                     <div className={`grid grid-cols-1 ${showHindi ? 'md:grid-cols-2' : ''} gap-3`}>
                       <div className="space-y-1">

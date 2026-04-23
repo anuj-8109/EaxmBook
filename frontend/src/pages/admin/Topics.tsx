@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { topicsAPI, subjectsAPI, categoriesAPI, aiAPI } from '@/lib/api';
-import { Plus, Pencil, Trash2, BookOpen, Search, Filter, X, ChevronLeft, ChevronRight, Tag, Bot, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, Search, Filter, X, ChevronLeft, ChevronRight, Tag, Bot, Loader2, Trash } from 'lucide-react';
 import { toast } from 'sonner';
 import Loader from '@/components/Loader';
 import { PaginationControls } from '@/components/PaginationControls';
@@ -60,6 +61,9 @@ const Topics = () => {
   // Server-side Pagination states
   const [totalPages, setTotalPages] = useState(1);
   const [paginatedTopics, setPaginatedTopics] = useState<Topic[]>([]);
+  
+  // Multi-select states
+  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchData();
@@ -162,6 +166,42 @@ const Topics = () => {
     try {
       await topicsAPI.delete(id);
       toast.success('Topic deleted successfully!');
+      fetchData();
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
+    }
+  };
+
+  // Multi-select handlers
+  const handleSelectTopic = (id: string) => {
+    setSelectedTopics(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTopics.size === paginatedTopics.length) {
+      setSelectedTopics(new Set());
+    } else {
+      const allIds = paginatedTopics.map(t => t._id || t.id).filter(Boolean) as string[];
+      setSelectedTopics(new Set(allIds));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedTopics.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedTopics.size} topics? This will also delete all levels and content associated with them.`)) return;
+
+    try {
+      await topicsAPI.batchDelete(Array.from(selectedTopics));
+      toast.success(`${selectedTopics.size} topics deleted successfully!`);
+      setSelectedTopics(new Set());
       fetchData();
     } catch (error: any) {
       toast.error('Error: ' + error.message);
@@ -456,12 +496,20 @@ const Topics = () => {
               <CardTitle className="text-base sm:text-lg md:text-xl">
                 Topics ({filteredTopics.length})
               </CardTitle>
-              {hasActiveFilters && (
-                <Button variant="outline" size="sm" onClick={clearFilters} className="text-xs sm:text-sm">
-                  <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                  Clear Filters
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {selectedTopics.size > 0 && (
+                  <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs sm:text-sm">
+                    <Trash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Delete ({selectedTopics.size})
+                  </Button>
+                )}
+                {hasActiveFilters && (
+                  <Button variant="outline" size="sm" onClick={clearFilters} className="text-xs sm:text-sm">
+                    <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Clear Filters
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -482,6 +530,13 @@ const Topics = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[40px] text-xs sm:text-sm">
+                        <Checkbox
+                          checked={paginatedTopics.length > 0 && selectedTopics.size === paginatedTopics.length}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all topics"
+                        />
+                      </TableHead>
                       <TableHead className="w-[50px] text-xs sm:text-sm">#</TableHead>
                       <TableHead className="text-xs sm:text-sm">Topic Name</TableHead>
                       <TableHead className="text-xs sm:text-sm">Subject</TableHead>
@@ -500,6 +555,13 @@ const Topics = () => {
                         : subject && categories.find(c => (c._id || c.id)?.toString() === subject.category_id?.toString());
                       return (
                         <TableRow key={topic._id || topic.id} className="hover:bg-muted/50">
+                          <TableCell className="w-[40px]">
+                            <Checkbox
+                              checked={selectedTopics.has(topic._id || topic.id || '')}
+                              onCheckedChange={() => handleSelectTopic(topic._id || topic.id || '')}
+                              aria-label={`Select ${topic.name}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium text-xs sm:text-sm">{(currentPage - 1) * itemsPerPage + index + 1}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">

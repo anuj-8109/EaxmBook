@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Briefcase, ExternalLink, RefreshCw, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Briefcase, ExternalLink, RefreshCw, Search, Filter, Trash } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { jobsAPI } from '@/lib/api';
 import Loader from '@/components/Loader';
@@ -46,6 +47,9 @@ const Jobs = () => {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Multi-select states
+  const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
 
   const [formData, setFormData] = useState({
     title: '',
@@ -137,9 +141,44 @@ const Jobs = () => {
       toast.success('Job deleted successfully!');
       fetchJobs();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to delete job');
+      toast.error('Failed to delete job');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelectJob = (id: string) => {
+    setSelectedJobs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedJobs.size === jobs.length) {
+      setSelectedJobs(new Set());
+    } else {
+      const allIds = jobs.map(j => j._id || j.id).filter(Boolean) as string[];
+      setSelectedJobs(new Set(allIds));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedJobs.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedJobs.size} jobs?`)) return;
+
+    try {
+      await jobsAPI.batchDelete(Array.from(selectedJobs));
+      toast.success(`${selectedJobs.size} jobs deleted successfully!`);
+      setSelectedJobs(new Set());
+      fetchJobs();
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
     }
   };
 
@@ -396,8 +435,21 @@ const Jobs = () => {
         <Card className="border border-border/70 rounded-[1.5rem] shadow-lg">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>All Jobs</CardTitle>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={jobs.length > 0 && selectedJobs.size === jobs.length}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="Select all jobs"
+                />
+                <CardTitle>All Jobs</CardTitle>
+              </div>
               <div className="flex gap-2">
+                {selectedJobs.size > 0 && (
+                  <Button variant="destructive" size="sm" onClick={handleBatchDelete}>
+                    <Trash className="h-4 w-4 mr-1" />
+                    Delete ({selectedJobs.size})
+                  </Button>
+                )}
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -412,11 +464,18 @@ const Jobs = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {jobs.map((job) => (
-                <div key={job._id || job.id} className="p-4 border rounded-xl hover:bg-slate-50">
-                  <div className="flex items-start justify-between">
+              {jobs.map((job) => {
+                const jobId = job._id || job.id || '';
+                return (
+                <div key={jobId} className={`p-4 border rounded-xl hover:bg-slate-50 ${selectedJobs.has(jobId) ? 'border-red-300 bg-red-50/30' : ''}`}>
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={selectedJobs.has(jobId)}
+                      onCheckedChange={() => handleSelectJob(jobId)}
+                      aria-label={`Select ${job.title}`}
+                    />
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2">
                         <Briefcase className="h-4 w-4 text-muted-foreground" />
                         <h3 className="font-semibold">{job.title}</h3>
                         {job.is_featured && <Badge variant="default">Featured</Badge>}
@@ -451,7 +510,7 @@ const Jobs = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
               {jobs.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">No jobs found</div>
               )}

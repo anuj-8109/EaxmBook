@@ -179,6 +179,10 @@ export const categoriesAPI = {
   delete: (id: string) => apiRequest(`/categories/${id}`, {
     method: 'DELETE',
   }),
+  batchDelete: (ids: string[]) => apiRequest('/categories/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
+  }),
   reorder: (categories: Array<{ id: string; order: number; parent_id?: string }>) => apiRequest('/categories/reorder', {
     method: 'POST',
     body: JSON.stringify({ categories }),
@@ -207,6 +211,10 @@ export const subjectsAPI = {
   delete: (id: string) => apiRequest(`/subjects/${id}`, {
     method: 'DELETE',
   }),
+  batchDelete: (ids: string[]) => apiRequest('/subjects/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
+  }),
 };
 
 // Topics API
@@ -230,6 +238,10 @@ export const topicsAPI = {
   }),
   delete: (id: string) => apiRequest(`/topics/${id}`, {
     method: 'DELETE',
+  }),
+  batchDelete: (ids: string[]) => apiRequest('/topics/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
   }),
 };
 
@@ -264,6 +276,10 @@ export const testsAPI = {
   }),
   delete: (id: string) => apiRequest(`/tests/${id}`, {
     method: 'DELETE',
+  }),
+  batchDelete: (ids: string[]) => apiRequest('/tests/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
   }),
   getQuestions: (id: string) => apiRequest(`/tests/${id}/questions`),
   addQuestion: (id: string, questionId: string, order: number) => apiRequest(`/tests/${id}/questions`, {
@@ -327,6 +343,10 @@ export const questionsAPI = {
   }),
   delete: (id: string) => apiRequest(`/questions/${id}`, {
     method: 'DELETE',
+  }),
+  batchDelete: (ids: string[]) => apiRequest('/questions/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
   }),
   findDuplicates: () => apiRequest('/questions/duplicates/check'),
   bulkCreate: (questions: any[]) => apiRequest('/questions/bulk', {
@@ -585,6 +605,10 @@ export const jobsAPI = {
   delete: (id: string) => apiRequest(`/jobs/${id}`, {
     method: 'DELETE',
   }),
+  batchDelete: (ids: string[]) => apiRequest('/jobs/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
+  }),
   syncAPI: (apiUrl: string, apiKey?: string, apiName?: string) => apiRequest('/jobs/sync-api', {
     method: 'POST',
     body: JSON.stringify({ api_url: apiUrl, api_key: apiKey, api_name: apiName }),
@@ -624,6 +648,10 @@ export const materialsAPI = {
   }),
   delete: (id: string) => apiRequest(`/materials/${id}`, {
     method: 'DELETE',
+  }),
+  batchDelete: (ids: string[]) => apiRequest('/materials/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
   }),
   download: (id: string) => apiRequest(`/materials/${id}/download`, {
     method: 'POST',

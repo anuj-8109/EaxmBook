@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { categoriesAPI } from '@/lib/api';
-import { Plus, Pencil, Trash2, GripVertical, ArrowUp, ArrowDown, FolderTree, Sparkles, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, GripVertical, ArrowUp, ArrowDown, FolderTree, Sparkles, X, Trash } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import Loader from '@/components/Loader';
@@ -39,6 +40,9 @@ const Categories = () => {
   // Server-side Pagination states
   const [totalPages, setTotalPages] = useState(1);
   const [paginatedCategories, setPaginatedCategories] = useState<Category[]>([]);
+  
+  // Multi-select states
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchCategories();
@@ -104,6 +108,42 @@ const Categories = () => {
     try {
       await categoriesAPI.delete(id);
       toast.success('Exam name deleted successfully!');
+      fetchCategories();
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
+    }
+  };
+
+  // Multi-select handlers
+  const handleSelectCategory = (id: string) => {
+    setSelectedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedCategories.size === paginatedCategories.length) {
+      setSelectedCategories(new Set());
+    } else {
+      const allIds = paginatedCategories.map(c => c._id || c.id).filter(Boolean) as string[];
+      setSelectedCategories(new Set(allIds));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedCategories.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedCategories.size} exam names?`)) return;
+
+    try {
+      await categoriesAPI.batchDelete(Array.from(selectedCategories));
+      toast.success(`${selectedCategories.size} exam names deleted successfully!`);
+      setSelectedCategories(new Set());
       fetchCategories();
     } catch (error: any) {
       toast.error('Error: ' + error.message);
@@ -242,11 +282,26 @@ const Categories = () => {
         <Card className="border-0 shadow-xl overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b">
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <FolderTree className="w-5 h-5 text-violet-500" />
-                Exam Names ({categories.length})
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">Use arrows to reorder</p>
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  checked={paginatedCategories.length > 0 && selectedCategories.size === paginatedCategories.length}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="Select all exam names"
+                />
+                <CardTitle className="flex items-center gap-2">
+                  <FolderTree className="w-5 h-5 text-violet-500" />
+                  Exam Names ({categories.length})
+                </CardTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedCategories.size > 0 && (
+                  <Button variant="destructive" size="sm" onClick={handleBatchDelete}>
+                    <Trash className="h-4 w-4 mr-1" />
+                    Delete ({selectedCategories.size})
+                  </Button>
+                )}
+                <p className="text-sm text-muted-foreground">Use arrows to reorder</p>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
@@ -265,11 +320,17 @@ const Categories = () => {
               <div className="space-y-3">
                 {paginatedCategories.map((category, index) => {
                   const actualIndex = (currentPage - 1) * itemsPerPage + index;
+                  const categoryId = category._id || category.id || '';
                   return (
                     <div
-                      key={category._id || category.id}
-                      className="category-card group flex items-center gap-4 p-4 rounded-2xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-lg transition-all duration-200"
+                      key={categoryId}
+                      className={`category-card group flex items-center gap-4 p-4 rounded-2xl border bg-white hover:border-violet-300 hover:shadow-lg transition-all duration-200 ${selectedCategories.has(categoryId) ? 'border-violet-400 bg-violet-50/50' : 'border-slate-200'}`}
                     >
+                      <Checkbox
+                        checked={selectedCategories.has(categoryId)}
+                        onCheckedChange={() => handleSelectCategory(categoryId)}
+                        aria-label={`Select ${category.name}`}
+                      />
                       {/* Reorder Controls */}
                       <div className="flex items-center gap-1">
                         <GripVertical className="h-5 w-5 text-slate-300 cursor-move" />

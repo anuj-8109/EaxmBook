@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { subjectsAPI, categoriesAPI, aiAPI } from '@/lib/api';
-import { Plus, Pencil, Trash2, BookOpen, Search, Filter, X, ChevronLeft, ChevronRight, Bot, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, Search, Filter, X, ChevronLeft, ChevronRight, Bot, Loader2, Trash } from 'lucide-react';
 import { toast } from 'sonner';
 import Loader from '@/components/Loader';
 import { PaginationControls } from '@/components/PaginationControls';
@@ -50,6 +51,9 @@ const Subjects = () => {
   // Server-side Pagination states
   const [totalPages, setTotalPages] = useState(1);
   const [paginatedSubjects, setPaginatedSubjects] = useState<Subject[]>([]);
+  
+  // Multi-select states
+  const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchData();
@@ -125,6 +129,42 @@ const Subjects = () => {
     try {
       await subjectsAPI.delete(id);
       toast.success('Subject deleted successfully!');
+      fetchData();
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
+    }
+  };
+
+  // Multi-select handlers
+  const handleSelectSubject = (id: string) => {
+    setSelectedSubjects(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedSubjects.size === paginatedSubjects.length) {
+      setSelectedSubjects(new Set());
+    } else {
+      const allIds = paginatedSubjects.map(s => s._id || s.id).filter(Boolean) as string[];
+      setSelectedSubjects(new Set(allIds));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedSubjects.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedSubjects.size} subjects?`)) return;
+
+    try {
+      await subjectsAPI.batchDelete(Array.from(selectedSubjects));
+      toast.success(`${selectedSubjects.size} subjects deleted successfully!`);
+      setSelectedSubjects(new Set());
       fetchData();
     } catch (error: any) {
       toast.error('Error: ' + error.message);
@@ -407,12 +447,20 @@ const Subjects = () => {
               <CardTitle className="text-base sm:text-lg md:text-xl">
                 Subjects ({subjects.length})
               </CardTitle>
-              {hasActiveFilters && (
-                <Button variant="outline" size="sm" onClick={clearFilters} className="text-xs sm:text-sm">
-                  <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                  Clear Filters
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {selectedSubjects.size > 0 && (
+                  <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs sm:text-sm">
+                    <Trash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Delete ({selectedSubjects.size})
+                  </Button>
+                )}
+                {hasActiveFilters && (
+                  <Button variant="outline" size="sm" onClick={clearFilters} className="text-xs sm:text-sm">
+                    <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Clear Filters
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -433,6 +481,13 @@ const Subjects = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[40px] text-xs sm:text-sm">
+                        <Checkbox
+                          checked={paginatedSubjects.length > 0 && selectedSubjects.size === paginatedSubjects.length}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all subjects"
+                        />
+                      </TableHead>
                       <TableHead className="w-[50px] text-xs sm:text-sm">#</TableHead>
                       <TableHead className="text-xs sm:text-sm">Subject Name</TableHead>
                       <TableHead className="text-xs sm:text-sm">Exam Name</TableHead>
@@ -447,6 +502,13 @@ const Subjects = () => {
                         : categories.find(c => (c._id || c.id)?.toString() === subject.category_id?.toString());
                       return (
                         <TableRow key={subject._id || subject.id} className="hover:bg-muted/50">
+                          <TableCell className="w-[40px]">
+                            <Checkbox
+                              checked={selectedSubjects.has(subject._id || subject.id || '')}
+                              onCheckedChange={() => handleSelectSubject(subject._id || subject.id || '')}
+                              aria-label={`Select ${subject.name}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium text-xs sm:text-sm">{(currentPage - 1) * itemsPerPage + index + 1}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
