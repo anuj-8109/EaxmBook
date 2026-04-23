@@ -1059,54 +1059,35 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
               {/* Answer Type Selector */}
               <div className="flex items-center gap-2 bg-muted/50 px-3 py-2 rounded-xl border border-border/50">
                 <Label className="text-sm font-semibold text-foreground">Answer Type:</Label>
-                <Select 
-                  value={formData.answer_type} 
-                  onValueChange={(val: 'single' | 'multiple' | 'none') => {
-                    console.log('🔥 ANSWER TYPE CHANGED TO:', val);
-                    setFormData(prev => {
-                      console.log('Previous answer_type:', prev.answer_type);
-                      const newState = {
-                        ...prev,
-                        answer_type: val,
-                        // Reset correct answers when changing type
-                        correct_answer: val === 'single' ? null : prev.correct_answer,
-                        correct_answers: val === 'multiple' ? [] : prev.correct_answers,
-                      };
-                      console.log('New state answer_type:', newState.answer_type);
-                      return newState;
-                    });
-                  }}
-                >
-                  <SelectTrigger className={`w-44 rounded-lg font-medium ${
-                    formData.answer_type === 'multiple' ? 'bg-blue-100 text-blue-700 border-blue-300' :
-                    formData.answer_type === 'none' ? 'bg-gray-100 text-gray-700 border-gray-300' :
-                    'bg-green-100 text-green-700 border-green-300'
-                  }`}>
-                    <SelectValue placeholder="Select type..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="single" className="text-green-700">✓ Single Answer</SelectItem>
-                    <SelectItem value="multiple" className="text-blue-700">✓✓ Multiple Answers</SelectItem>
-                    <SelectItem value="none" className="text-gray-700">✗ No Answer</SelectItem>
-                  </SelectContent>
-                </Select>
-                {/* DEBUG: Direct toggle button */}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    console.log('🚨 FORCE CHANGING TO MULTIPLE');
-                    setFormData(prev => ({
-                      ...prev,
-                      answer_type: 'multiple',
-                      correct_answers: [],
-                    }));
-                  }}
-                  className="text-xs bg-blue-100 border-blue-300 text-blue-700"
-                >
-                  FORCE: Multiple Mode
-                </Button>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={formData.answer_type === 'single' ? 'default' : 'outline'}
+                    onClick={() => setFormData(prev => ({ ...prev, answer_type: 'single', correct_answer: null, correct_answers: [] }))}
+                    className={`text-xs ${formData.answer_type === 'single' ? 'bg-green-600' : ''}`}
+                  >
+                    ✓ Single
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={formData.answer_type === 'multiple' ? 'default' : 'outline'}
+                    onClick={() => setFormData(prev => ({ ...prev, answer_type: 'multiple', correct_answer: null, correct_answers: [] }))}
+                    className={`text-xs ${formData.answer_type === 'multiple' ? 'bg-blue-600' : ''}`}
+                  >
+                    ✓✓ Multiple
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={formData.answer_type === 'none' ? 'default' : 'outline'}
+                    onClick={() => setFormData(prev => ({ ...prev, answer_type: 'none', correct_answer: null, correct_answers: [] }))}
+                    className={`text-xs ${formData.answer_type === 'none' ? 'bg-gray-600' : ''}`}
+                  >
+                    ✗ None
+                  </Button>
+                </div>
               </div>
             </div>
 
