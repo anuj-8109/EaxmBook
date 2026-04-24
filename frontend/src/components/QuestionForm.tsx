@@ -490,7 +490,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
 
   const fetchAllSubjects = async () => {
     try {
-      const subs = await subjectsAPI.getAll();
+      const subs = await subjectsAPI.getAll(undefined, 1, 1000);
       console.log('Fetched all subjects:', subs);
       const normalizedSubs = normalizeArrayData(subs, 'subjects');
       console.log('Normalized subjects:', normalizedSubs.length);
@@ -507,8 +507,8 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     try {
       const [catsData, topsData, subsData] = await Promise.all([
         categoriesAPI.getAll(true),
-        topicsAPI.getAll(),
-        subjectsAPI.getAll(), // Fetch all subjects initially
+        topicsAPI.getAll(undefined, 1, 1000),
+        subjectsAPI.getAll(undefined, 1, 1000), // Fetch all subjects with high limit
       ]);
       console.log('Fetched categories:', catsData);
       console.log('Fetched topics:', topsData);
@@ -561,7 +561,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
 
   const fetchSubjectsForCategory = async (catId: string) => {
     try {
-      const subs = await subjectsAPI.getAll(catId);
+      const subs = await subjectsAPI.getAll(catId, 1, 1000);
       console.log('Fetched subjects for category', catId, ':', subs);
       const normalizedSubs = normalizeArrayData(subs, 'subjects');
       console.log('Normalized subjects for category:', normalizedSubs.length);

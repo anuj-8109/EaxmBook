@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Upload, FileText, FileSpreadsheet, AlertCircle, Download, X, Eye, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import * as docx from 'docx';
+import { saveAs } from 'file-saver';
 
 interface BulkUploadProps {
   onUpload: (file: File, format: 'csv' | 'docx') => Promise<void>;
@@ -23,7 +25,7 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const downloadDummyTemplate = () => {
+  const downloadDummyTemplateCSV = () => {
     // Create dummy CSV template
     const csvContent = `difficulty_level,question_text,option_a,option_b,option_c,option_d,correct_answer,explanation,hint,question_reference,exam_names,time_duration
 5,What is the capital of India?,Delhi,Mumbai,Kolkata,Chennai,0,Delhi is the capital of India,Think about the administrative center,REF001,SSC|Railway,60
@@ -42,7 +44,122 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('Dummy template downloaded!');
+    toast.success('CSV template downloaded!');
+  };
+
+  const downloadDummyTemplateDOCX = async () => {
+    try {
+      const { Document, Paragraph, Table, TableCell, TableRow, TextRun, HeadingLevel, AlignmentType, WidthType, BorderStyle } = docx;
+
+      // Create header rows with field descriptions
+      const headerRow = new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Field', bold: true, size: 20 })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Description', bold: true, size: 20 })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Required', bold: true, size: 20 })] })] }),
+        ],
+      });
+
+      const fieldRows = [
+        ['difficulty_level', 'Difficulty level from 1-10', 'Yes'],
+        ['question_text', 'The question text', 'Yes'],
+        ['option_a', 'Option A text', 'Yes'],
+        ['option_b', 'Option B text', 'Yes'],
+        ['option_c', 'Option C text', 'Yes'],
+        ['option_d', 'Option D text', 'Yes'],
+        ['correct_answer', 'Correct answer index (0-3 for A-D, 4 for X)', 'Yes'],
+        ['explanation', 'Explanation for the answer', 'No'],
+        ['hint', 'Hint for the question', 'No'],
+        ['question_reference', 'Reference code (e.g., PYQ2023)', 'No'],
+        ['exam_names', 'Exam names separated by |', 'No'],
+        ['time_duration', 'Time in seconds (e.g., 60)', 'No'],
+      ].map(([field, desc, required]) => new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: field, bold: true, size: 18 })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: desc, size: 18 })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: required, size: 18, color: required === 'Yes' ? 'FF0000' : '00AA00' })] })] }),
+        ],
+      }));
+
+      // Sample question data table
+      const sampleHeaderRow = new TableRow({
+        children: [
+          'Difficulty', 'Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Answer', 'Explanation'
+        ].map(h => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, size: 16 })] })] })),
+      });
+
+      const sampleRows = [
+        ['5', 'What is the capital of India?', 'Delhi', 'Mumbai', 'Kolkata', 'Chennai', '0 (Delhi)', 'Delhi is the capital of India'],
+        ['6', 'Which planet is closest to Sun?', 'Mercury', 'Venus', 'Earth', 'Mars', '0 (Mercury)', 'Mercury is closest to Sun'],
+        ['7', 'What is 2 + 2?', '3', '4', '5', '6', '1 (4)', 'Basic arithmetic'],
+      ].map(row => new TableRow({
+        children: row.map(cell => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: cell, size: 16 })] })] })),
+      }));
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              text: 'Bulk Questions Upload Template',
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({
+              text: 'This document provides the format for bulk uploading questions to the system.',
+              spacing: { after: 200 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: 'Field Definitions', bold: true, size: 24 })],
+              spacing: { before: 200, after: 100 },
+            }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [headerRow, ...fieldRows],
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: 'Sample Questions', bold: true, size: 24 })],
+              spacing: { before: 300, after: 100 },
+            }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [sampleHeaderRow, ...sampleRows],
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: 'Instructions:', bold: true, size: 20 })],
+              spacing: { before: 300, after: 100 },
+            }),
+            new Paragraph({
+              text: '1. Correct answer index: 0=A, 1=B, 2=C, 3=D, 4=X (none)',
+              spacing: { after: 50 },
+            }),
+            new Paragraph({
+              text: '2. For multiple exam names, separate with pipe (|) like: SSC|Railway|Banking',
+              spacing: { after: 50 },
+            }),
+            new Paragraph({
+              text: '3. Time duration is in seconds (e.g., 60 for 1 minute)',
+              spacing: { after: 50 },
+            }),
+            new Paragraph({
+              text: '4. Difficulty level must be between 1 (easy) and 10 (hard)',
+              spacing: { after: 50 },
+            }),
+            new Paragraph({
+              text: '5. When uploading, save this document as CSV format for bulk upload',
+              spacing: { after: 50 },
+            }),
+          ],
+        }],
+      });
+
+      const blob = await docx.Packer.toBlob(doc);
+      saveAs(blob, 'dummy_questions_template.docx');
+      toast.success('DOCX template downloaded!');
+    } catch (error: any) {
+      console.error('Failed to generate DOCX:', error);
+      toast.error('Failed to generate DOCX template: ' + error.message);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,19 +323,31 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
       <CardContent className="p-4 space-y-4">
         {/* Download Template Section */}
         <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold mb-1">Download Dummy Template</h3>
-              <p className="text-xs text-muted-foreground">Download sample CSV file to see the format</p>
+              <p className="text-xs text-muted-foreground">Download sample file to see the format</p>
             </div>
-            <Button
-              onClick={downloadDummyTemplate}
-              variant="outline"
-              className="rounded-xl border-primary/50 hover:bg-primary/10"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download Template
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={downloadDummyTemplateCSV}
+                variant="outline"
+                size="sm"
+                className="rounded-xl border-primary/50 hover:bg-primary/10"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+                CSV
+              </Button>
+              <Button
+                onClick={downloadDummyTemplateDOCX}
+                variant="outline"
+                size="sm"
+                className="rounded-xl border-primary/50 hover:bg-primary/10"
+              >
+                <FileText className="h-4 w-4 mr-2 text-blue-600" />
+                DOCX
+              </Button>
+            </div>
           </div>
         </div>
 

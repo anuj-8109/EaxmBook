@@ -111,7 +111,7 @@ const Subjects = () => {
   };
 
   const handleEdit = (subject: Subject) => {
-    const catId = typeof subject.category_id === 'object'
+    const catId = subject.category_id && typeof subject.category_id === 'object'
       ? (subject.category_id._id || subject.category_id.id)
       : subject.category_id;
     setFormData({
@@ -207,7 +207,7 @@ const Subjects = () => {
     return subjects.filter(subject => {
       // Category filter
       if (selectedCategory && selectedCategory !== 'all') {
-        const catId = typeof subject.category_id === 'object'
+        const catId = subject.category_id && typeof subject.category_id === 'object'
           ? (subject.category_id._id || subject.category_id.id)
           : subject.category_id;
         if (catId?.toString() !== selectedCategory?.toString()) {
@@ -220,7 +220,7 @@ const Subjects = () => {
         const query = searchQuery.toLowerCase();
         const subjectName = subject.name?.toLowerCase() || '';
         const description = subject.description?.toLowerCase() || '';
-        const categoryName = typeof subject.category_id === 'object'
+        const categoryName = subject.category_id && typeof subject.category_id === 'object'
           ? subject.category_id?.name?.toLowerCase() || ''
           : '';
 
@@ -497,7 +497,7 @@ const Subjects = () => {
                   </TableHeader>
                   <TableBody>
                     {paginatedSubjects.map((subject, index) => {
-                      const category = typeof subject.category_id === 'object'
+                      const category = subject.category_id && typeof subject.category_id === 'object'
                         ? subject.category_id
                         : categories.find(c => (c._id || c.id)?.toString() === subject.category_id?.toString());
                       return (

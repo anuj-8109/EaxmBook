@@ -148,7 +148,7 @@ const Topics = () => {
   };
 
   const handleEdit = (topic: Topic) => {
-    const subId = typeof topic.subject_id === 'object'
+    const subId = topic.subject_id && typeof topic.subject_id === 'object'
       ? (topic.subject_id._id || topic.subject_id.id)
       : topic.subject_id;
     setFormData({
@@ -344,7 +344,7 @@ const Topics = () => {
                     <SelectContent>
                       {subjects.map((sub) => {
                         const subId = sub._id || sub.id;
-                        const category = typeof sub.category_id === 'object'
+                        const category = sub.category_id && typeof sub.category_id === 'object'
                           ? sub.category_id
                           : categories.find(c => (c._id || c.id)?.toString() === sub.category_id?.toString());
                         return (
@@ -471,7 +471,7 @@ const Topics = () => {
                         <SelectItem value="all">All Subjects</SelectItem>
                         {subjects.map(sub => {
                           const subId = sub._id || sub.id;
-                          const category = typeof sub.category_id === 'object'
+                          const category = sub.category_id && typeof sub.category_id === 'object'
                             ? sub.category_id
                             : categories.find(c => (c._id || c.id)?.toString() === sub.category_id?.toString());
                           return (
@@ -547,10 +547,10 @@ const Topics = () => {
                   </TableHeader>
                   <TableBody>
                     {paginatedTopics.map((topic, index) => {
-                      const subject = typeof topic.subject_id === 'object'
+                      const subject = topic.subject_id && typeof topic.subject_id === 'object'
                         ? topic.subject_id
                         : subjects.find(s => (s._id || s.id)?.toString() === topic.subject_id?.toString());
-                      const category = subject && typeof subject.category_id === 'object'
+                      const category = subject && subject.category_id && typeof subject.category_id === 'object'
                         ? subject.category_id
                         : subject && categories.find(c => (c._id || c.id)?.toString() === subject.category_id?.toString());
                       return (
