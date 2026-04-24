@@ -445,15 +445,18 @@ router.put('/:id', requireAdmin, async (req, res) => {
       updateData.correct_answers = [];
     }
 
-    const question = await Question.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    // Fetch the question first to properly handle validation
+    const question = await Question.findById(req.params.id);
 
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
     }
+
+    // Update all fields
+    Object.assign(question, updateData);
+
+    // Save with validation (this properly handles 'this' context in schema validators)
+    await question.save();
 
     await question.populate('category_id');
     await question.populate('subject_id');
