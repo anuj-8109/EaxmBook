@@ -147,7 +147,7 @@ const Questions = () => {
 
   const handleEdit = (question: Question) => {
     setEditingQuestion(question);
-    setShowForm(false);
+    setShowForm(true);
     setActiveTab('add');
   };
 
@@ -697,22 +697,22 @@ const Questions = () => {
                   question_text: editingQuestion.question_text || '',
                   question_text_hindi: editingQuestion.question_text_hindi || '',
                   option_a: editingQuestion.option_a || '',
-                  option_a_hindi: '',
+                  option_a_hindi: editingQuestion.option_a_hindi || '',
                   option_b: editingQuestion.option_b || '',
-                  option_b_hindi: '',
+                  option_b_hindi: editingQuestion.option_b_hindi || '',
                   option_c: editingQuestion.option_c || '',
-                  option_c_hindi: '',
+                  option_c_hindi: editingQuestion.option_c_hindi || '',
                   option_d: editingQuestion.option_d || '',
-                  option_d_hindi: '',
+                  option_d_hindi: editingQuestion.option_d_hindi || '',
                   option_x: editingQuestion.option_x || '',
-                  option_x_hindi: '',
+                  option_x_hindi: editingQuestion.option_x_hindi || '',
                   answer_type: editingQuestion.answer_type || 'single',
                   correct_answer: editingQuestion.correct_answer ?? null,
                   correct_answers: editingQuestion.correct_answers || [],
                   hint: editingQuestion.hint || '',
-                  hint_hindi: '',
+                  hint_hindi: editingQuestion.hint_hindi || '',
                   explanation: editingQuestion.explanation || '',
-                  explanation_hindi: '',
+                  explanation_hindi: editingQuestion.explanation_hindi || '',
                 } : undefined}
                 onSubmit={handleSubmit}
                 onCancel={() => {

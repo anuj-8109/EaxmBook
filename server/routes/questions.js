@@ -382,18 +382,33 @@ router.put('/:id', requireAdmin, async (req, res) => {
       question_reference,
     } = req.body;
 
+    // Helper function to check if a string is not empty
+    const isNotEmpty = (str) => str && typeof str === 'string' && str.trim().length > 0;
+
+    // For schema compatibility: if English is empty but Hindi is provided, use Hindi for required fields
+    const finalQuestionText = isNotEmpty(question_text) ? question_text : 
+                             (isNotEmpty(question_text_hindi) ? question_text_hindi : '');
+    const finalOptionA = isNotEmpty(option_a) ? option_a : 
+                        (isNotEmpty(option_a_hindi) ? option_a_hindi : '');
+    const finalOptionB = isNotEmpty(option_b) ? option_b : 
+                        (isNotEmpty(option_b_hindi) ? option_b_hindi : '');
+    const finalOptionC = isNotEmpty(option_c) ? option_c : 
+                        (isNotEmpty(option_c_hindi) ? option_c_hindi : '');
+    const finalOptionD = isNotEmpty(option_d) ? option_d : 
+                        (isNotEmpty(option_d_hindi) ? option_d_hindi : '');
+
     // Handle answer_type logic
     const finalAnswerType = answer_type || 'single';
     const updateData = {
-      question_text,
+      question_text: finalQuestionText,
       question_text_hindi,
-      option_a,
+      option_a: finalOptionA,
       option_a_hindi,
-      option_b,
+      option_b: finalOptionB,
       option_b_hindi,
-      option_c,
+      option_c: finalOptionC,
       option_c_hindi,
-      option_d,
+      option_d: finalOptionD,
       option_d_hindi,
       option_x,
       option_x_hindi,
