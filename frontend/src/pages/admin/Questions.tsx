@@ -79,6 +79,10 @@ const Questions = () => {
       category_ids: editingQuestion.category_ids?.map((c: any) => c._id || c.id || c) || [],
       subject_ids: editingQuestion.subject_ids?.map((s: any) => s._id || s.id || s) || [],
       topic_ids: editingQuestion.topic_ids?.map((t: any) => t._id || t.id || t) || [],
+      // Include names for display before API loads
+      category_names: editingQuestion.category_ids?.map((c: any) => c.name) || [],
+      subject_names: editingQuestion.subject_ids?.map((s: any) => s.name) || [],
+      topic_names: editingQuestion.topic_ids?.map((t: any) => t.name) || [],
       time_duration: editingQuestion.time_duration || null,
       difficulty_level: editingQuestion.difficulty_level || 5,
       question_reference: editingQuestion.question_reference || '',
@@ -730,7 +734,7 @@ const Questions = () => {
                 </div>
               </div>
               <QuestionForm
-                key={editingQuestion?._id || 'new'}
+                key={editingQuestion?._id || editingQuestion?.id || 'new'}
                 initialData={questionFormInitialData}
                 onSubmit={handleSubmit}
                 onCancel={() => {
