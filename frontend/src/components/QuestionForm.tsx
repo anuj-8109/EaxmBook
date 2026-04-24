@@ -428,36 +428,64 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     option_x_image_url: '',
     hint_image_url: '',
     explanation_image_url: '',
-    ...initialData,
   });
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  // Debug: Log state changes
-  useEffect(() => {
-    console.log('=== QuestionForm State ===');
-    console.log('Categories:', categories.length, categories);
-    console.log('Subjects:', subjects.length, subjects);
-    console.log('Topics:', topics.length, topics);
-    console.log('Selected Category:', selectedCategoryId);
-    console.log('========================');
-  }, [categories, subjects, topics, selectedCategoryId]);
-
-  // Normalize initialData for backward compatibility with old questions
   useEffect(() => {
     if (initialData) {
-      // If old question doesn't have answer_type, determine it from correct_answer
-      if (!initialData.answer_type) {
-        const hasCorrectAnswer = initialData.correct_answer !== undefined && initialData.correct_answer !== null;
-        const normalizedAnswerType = hasCorrectAnswer ? 'single' : 'none';
-        setFormData(prev => ({
-          ...prev,
-          answer_type: normalizedAnswerType,
-          correct_answers: hasCorrectAnswer ? [initialData.correct_answer as number] : [],
-        }));
-      }
+      setFormData({
+        exam_names: initialData.exam_names || [],
+        category_ids: initialData.category_ids || [],
+        subject_ids: initialData.subject_ids || [],
+        topic_ids: initialData.topic_ids || [],
+        time_duration: initialData.time_duration ?? null,
+        difficulty_level: initialData.difficulty_level || 5,
+        question_reference: initialData.question_reference || '',
+        question_text: initialData.question_text || '',
+        question_text_hindi: initialData.question_text_hindi || '',
+        option_a: initialData.option_a || '',
+        option_a_hindi: initialData.option_a_hindi || '',
+        option_b: initialData.option_b || '',
+        option_b_hindi: initialData.option_b_hindi || '',
+        option_c: initialData.option_c || '',
+        option_c_hindi: initialData.option_c_hindi || '',
+        option_d: initialData.option_d || '',
+        option_d_hindi: initialData.option_d_hindi || '',
+        option_x: initialData.option_x || '',
+        option_x_hindi: initialData.option_x_hindi || '',
+        answer_type: initialData.answer_type || 'single',
+        correct_answer: initialData.correct_answer ?? 0,
+        correct_answers: initialData.correct_answers || [],
+        hint: initialData.hint || '',
+        hint_hindi: initialData.hint_hindi || '',
+        explanation: initialData.explanation || '',
+        explanation_hindi: initialData.explanation_hindi || '',
+        question_image_url: initialData.question_image_url || '',
+        question_video_url: initialData.question_video_url || '',
+        option_a_image_url: initialData.option_a_image_url || '',
+        option_b_image_url: initialData.option_b_image_url || '',
+        option_c_image_url: initialData.option_c_image_url || '',
+        option_d_image_url: initialData.option_d_image_url || '',
+        option_x_image_url: initialData.option_x_image_url || '',
+        hint_image_url: initialData.hint_image_url || '',
+        explanation_image_url: initialData.explanation_image_url || '',
+      });
+
+      // Auto-enable Hindi toggle if question has any Hindi content
+      const hasHindiContent = !!(
+        initialData.question_text_hindi?.trim() ||
+        initialData.option_a_hindi?.trim() ||
+        initialData.option_b_hindi?.trim() ||
+        initialData.option_c_hindi?.trim() ||
+        initialData.option_d_hindi?.trim() ||
+        initialData.option_x_hindi?.trim() ||
+        initialData.hint_hindi?.trim() ||
+        initialData.explanation_hindi?.trim()
+      );
+      setShowHindi(hasHindiContent);
     }
   }, [initialData]);
 
@@ -465,8 +493,14 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     if (initialData?.category_ids && initialData.category_ids.length > 0) {
       setSelectedCategoryId(initialData.category_ids[0]);
       fetchSubjectsForCategory(initialData.category_ids[0]);
+    } else if (initialData === undefined) {
+      // Adding new question - clear category selection and hide Hindi
+      setSelectedCategoryId('');
+      setShowHindi(false);
+      fetchAllSubjects();
     } else {
-      // If no category in initial data, fetch all subjects
+      // Editing question with no category - clear selection
+      setSelectedCategoryId('');
       fetchAllSubjects();
     }
   }, [initialData]);
@@ -510,15 +544,9 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
         topicsAPI.getAll(undefined, 1, 1000),
         subjectsAPI.getAll(undefined, 1, 1000), // Fetch all subjects with high limit
       ]);
-      console.log('Fetched categories:', catsData);
-      console.log('Fetched topics:', topsData);
-      console.log('Fetched subjects:', subsData);
-      
       const normalizedCats = normalizeArrayData(catsData, 'categories');
       const normalizedTopics = normalizeArrayData(topsData, 'topics');
       const normalizedSubjects = normalizeArrayData(subsData, 'subjects');
-      
-      console.log('Normalized:', { cats: normalizedCats.length, topics: normalizedTopics.length, subjects: normalizedSubjects.length });
       
       setCategories(normalizedCats);
       setTopics(normalizedTopics);
@@ -750,6 +778,12 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                         {cat.name}
                       </SelectItem>
                     ))}
+                    {/* Fallback: Show selected category even if not in loaded list (during edit) */}
+                    {selectedCategoryId && !allCategoriesFlat.find(c => c.id === selectedCategoryId) && (
+                      <SelectItem key={selectedCategoryId} value={selectedCategoryId}>
+                        (Loading...)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -807,6 +841,12 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                         {sub.name}
                       </SelectItem>
                     ))}
+                    {/* Fallback: Show selected subject even if not in loaded list (during edit) */}
+                    {formData.subject_ids[0] && !subjects.find(s => (s._id || s.id) === formData.subject_ids[0]) && (
+                      <SelectItem key={formData.subject_ids[0]} value={formData.subject_ids[0]}>
+                        (Loading...)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -846,6 +886,12 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                         {topic.name}
                       </SelectItem>
                     ))}
+                    {/* Fallback: Show selected topic even if not in filtered list (during edit) */}
+                    {formData.topic_ids[0] && !filteredTopics.find(t => (t._id || t.id) === formData.topic_ids[0]) && (
+                      <SelectItem key={formData.topic_ids[0]} value={formData.topic_ids[0]}>
+                        (Loading...)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 {formData.subject_ids.length > 0 && !formData.topic_ids[0] && (

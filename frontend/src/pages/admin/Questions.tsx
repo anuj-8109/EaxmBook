@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,39 @@ const Questions = () => {
   
   // Multi-select states
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
+
+  // Memoize initialData to prevent unnecessary re-renders of QuestionForm
+  const questionFormInitialData = useMemo(() => {
+    if (!editingQuestion) return undefined;
+    return {
+      exam_names: editingQuestion.exam_names || [],
+      category_ids: editingQuestion.category_ids?.map((c: any) => c._id || c.id || c) || [],
+      subject_ids: editingQuestion.subject_ids?.map((s: any) => s._id || s.id || s) || [],
+      topic_ids: editingQuestion.topic_ids?.map((t: any) => t._id || t.id || t) || [],
+      time_duration: editingQuestion.time_duration || null,
+      difficulty_level: editingQuestion.difficulty_level || 5,
+      question_reference: editingQuestion.question_reference || '',
+      question_text: editingQuestion.question_text || '',
+      question_text_hindi: editingQuestion.question_text_hindi || '',
+      option_a: editingQuestion.option_a || '',
+      option_a_hindi: editingQuestion.option_a_hindi || '',
+      option_b: editingQuestion.option_b || '',
+      option_b_hindi: editingQuestion.option_b_hindi || '',
+      option_c: editingQuestion.option_c || '',
+      option_c_hindi: editingQuestion.option_c_hindi || '',
+      option_d: editingQuestion.option_d || '',
+      option_d_hindi: editingQuestion.option_d_hindi || '',
+      option_x: editingQuestion.option_x || '',
+      option_x_hindi: editingQuestion.option_x_hindi || '',
+      answer_type: editingQuestion.answer_type || 'single',
+      correct_answer: editingQuestion.correct_answer ?? null,
+      correct_answers: editingQuestion.correct_answers || [],
+      hint: editingQuestion.hint || '',
+      hint_hindi: editingQuestion.hint_hindi || '',
+      explanation: editingQuestion.explanation || '',
+      explanation_hindi: editingQuestion.explanation_hindi || '',
+    };
+  }, [editingQuestion]);
 
   useEffect(() => {
     fetchQuestions();
@@ -688,39 +721,17 @@ const Questions = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold">Add New Question</h2>
-                  <p className="text-sm text-muted-foreground">Create a new question with options, hints, and explanations</p>
+                  <h2 className="text-lg font-semibold">
+                    {editingQuestion ? 'Edit Question' : 'Add New Question'}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {editingQuestion ? 'Update the question details' : 'Create a new question with options, hints, and explanations'}
+                  </p>
                 </div>
               </div>
               <QuestionForm
-                initialData={editingQuestion ? {
-                  exam_names: editingQuestion.exam_names || [],
-                  category_ids: editingQuestion.category_ids?.map((c: any) => c._id || c.id || c) || [],
-                  subject_ids: editingQuestion.subject_ids?.map((s: any) => s._id || s.id || s) || [],
-                  topic_ids: editingQuestion.topic_ids?.map((t: any) => t._id || t.id || t) || [],
-                  time_duration: editingQuestion.time_duration || null,
-                  difficulty_level: editingQuestion.difficulty_level || 5,
-                  question_reference: editingQuestion.question_reference || '',
-                  question_text: editingQuestion.question_text || '',
-                  question_text_hindi: editingQuestion.question_text_hindi || '',
-                  option_a: editingQuestion.option_a || '',
-                  option_a_hindi: editingQuestion.option_a_hindi || '',
-                  option_b: editingQuestion.option_b || '',
-                  option_b_hindi: editingQuestion.option_b_hindi || '',
-                  option_c: editingQuestion.option_c || '',
-                  option_c_hindi: editingQuestion.option_c_hindi || '',
-                  option_d: editingQuestion.option_d || '',
-                  option_d_hindi: editingQuestion.option_d_hindi || '',
-                  option_x: editingQuestion.option_x || '',
-                  option_x_hindi: editingQuestion.option_x_hindi || '',
-                  answer_type: editingQuestion.answer_type || 'single',
-                  correct_answer: editingQuestion.correct_answer ?? null,
-                  correct_answers: editingQuestion.correct_answers || [],
-                  hint: editingQuestion.hint || '',
-                  hint_hindi: editingQuestion.hint_hindi || '',
-                  explanation: editingQuestion.explanation || '',
-                  explanation_hindi: editingQuestion.explanation_hindi || '',
-                } : undefined}
+                key={editingQuestion?._id || 'new'}
+                initialData={questionFormInitialData}
                 onSubmit={handleSubmit}
                 onCancel={() => {
                   setShowForm(false);
