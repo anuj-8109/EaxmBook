@@ -115,7 +115,10 @@ router.post('/', requireAdmin, async (req, res) => {
       option_c, option_c_hindi,
       option_d, option_d_hindi,
       option_x, option_x_hindi,
+      // Answer type and correct answers
+      answer_type,
       correct_answer,
+      correct_answers,
       // Hint and explanation
       hint, hint_hindi,
       explanation, explanation_hindi,
@@ -177,10 +180,19 @@ router.post('/', requireAdmin, async (req, res) => {
       }
     }
     
-    // Validate correct_answer
-    if (correct_answer === undefined || correct_answer === null) {
-      return res.status(400).json({ error: 'Correct answer is required' });
+    // Validate based on answer_type
+    const finalAnswerType = answer_type || 'single';
+    
+    if (finalAnswerType === 'single') {
+      if (correct_answer === undefined || correct_answer === null) {
+        return res.status(400).json({ error: 'Correct answer is required for single answer type' });
+      }
+    } else if (finalAnswerType === 'multiple') {
+      if (!correct_answers || !Array.isArray(correct_answers) || correct_answers.length === 0) {
+        return res.status(400).json({ error: 'At least one correct answer is required for multiple answer type' });
+      }
     }
+    // 'none' answer type doesn't require any correct answer
 
     if (difficulty_level === undefined || difficulty_level < 1 || difficulty_level > 10) {
       return res.status(400).json({ error: 'Difficulty level (1-10) is required' });
@@ -215,7 +227,9 @@ router.post('/', requireAdmin, async (req, res) => {
       option_d_hindi: toNullIfEmpty(option_d_hindi),
       option_x: toNullIfEmpty(option_x),
       option_x_hindi: toNullIfEmpty(option_x_hindi),
-      correct_answer,
+      answer_type: finalAnswerType,
+      correct_answer: finalAnswerType === 'single' ? correct_answer : null,
+      correct_answers: finalAnswerType === 'multiple' ? (correct_answers || []) : [],
       hint: toNullIfEmpty(hint),
       hint_hindi: toNullIfEmpty(hint_hindi),
       explanation: toNullIfEmpty(explanation),
@@ -342,34 +356,83 @@ router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const {
       question_text,
-      option_a,
-      option_b,
-      option_c,
-      option_d,
+      question_text_hindi,
+      option_a, option_a_hindi,
+      option_b, option_b_hindi,
+      option_c, option_c_hindi,
+      option_d, option_d_hindi,
+      option_x, option_x_hindi,
+      answer_type,
       correct_answer,
+      correct_answers,
+      hint, hint_hindi,
       explanation,
+      explanation_hindi,
       image_url,
       difficulty,
+      difficulty_level,
       category_id,
       subject_id,
+      topic_id,
+      category_ids,
+      subject_ids,
+      topic_ids,
+      exam_names,
+      time_duration,
+      question_reference,
     } = req.body;
+
+    // Handle answer_type logic
+    const finalAnswerType = answer_type || 'single';
+    const updateData = {
+      question_text,
+      question_text_hindi,
+      option_a,
+      option_a_hindi,
+      option_b,
+      option_b_hindi,
+      option_c,
+      option_c_hindi,
+      option_d,
+      option_d_hindi,
+      option_x,
+      option_x_hindi,
+      answer_type: finalAnswerType,
+      hint,
+      hint_hindi,
+      explanation,
+      explanation_hindi,
+      image_url,
+      difficulty,
+      difficulty_level,
+      category_id,
+      subject_id,
+      topic_id,
+      category_ids,
+      subject_ids,
+      topic_ids,
+      exam_names,
+      time_duration,
+      question_reference,
+      updated_at: Date.now(),
+    };
+
+    // Handle correct_answer and correct_answers based on answer_type
+    if (finalAnswerType === 'single') {
+      updateData.correct_answer = correct_answer;
+      updateData.correct_answers = [];
+    } else if (finalAnswerType === 'multiple') {
+      updateData.correct_answer = null;
+      updateData.correct_answers = correct_answers || [];
+    } else {
+      // 'none' type
+      updateData.correct_answer = null;
+      updateData.correct_answers = [];
+    }
 
     const question = await Question.findByIdAndUpdate(
       req.params.id,
-      {
-        question_text,
-        option_a,
-        option_b,
-        option_c,
-        option_d,
-        correct_answer,
-        explanation,
-        image_url,
-        difficulty,
-        category_id,
-        subject_id,
-        updated_at: Date.now(),
-      },
+      updateData,
       { new: true, runValidators: true }
     );
 
