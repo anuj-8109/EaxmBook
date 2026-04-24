@@ -91,6 +91,27 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Batch delete subjects (admin only) - MUST be before /:id route
+router.delete('/batch', requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'IDs array is required' });
+    }
+
+    const result = await Subject.deleteMany({ _id: { $in: ids } });
+
+    res.json({
+      message: 'Subjects deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Batch delete subjects error:', error);
+    res.status(500).json({ error: 'Failed to delete subjects' });
+  }
+});
+
 // Delete subject (admin only)
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {

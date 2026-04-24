@@ -184,6 +184,27 @@ router.post('/reorder', requireAdmin, async (req, res) => {
   }
 });
 
+// Batch delete categories (admin only) - MUST be before /:id route
+router.delete('/batch', requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'IDs array is required' });
+    }
+
+    const result = await Category.deleteMany({ _id: { $in: ids } });
+
+    res.json({
+      message: 'Categories deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Batch delete categories error:', error);
+    res.status(500).json({ error: 'Failed to delete categories' });
+  }
+});
+
 // Delete category (authenticated users can delete)
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {

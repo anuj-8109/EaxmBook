@@ -377,6 +377,31 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Batch delete tests (admin only) - MUST be before /:id route
+router.delete('/batch', requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'IDs array is required' });
+    }
+
+    // Delete tests
+    const result = await Test.deleteMany({ _id: { $in: ids } });
+
+    // Delete associated test questions
+    await TestQuestion.deleteMany({ test_id: { $in: ids } });
+
+    res.json({
+      message: 'Tests deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Batch delete tests error:', error);
+    res.status(500).json({ error: 'Failed to delete tests' });
+  }
+});
+
 // Delete test (admin only)
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {

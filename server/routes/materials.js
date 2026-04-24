@@ -181,6 +181,27 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Batch delete materials (admin only) - MUST be before /:id route
+router.delete('/batch', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'IDs array is required' });
+    }
+
+    const result = await Material.deleteMany({ _id: { $in: ids } });
+
+    res.json({
+      message: 'Materials deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Batch delete materials error:', error);
+    res.status(500).json({ error: 'Failed to delete materials' });
+  }
+});
+
 // Delete material (admin only)
 router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {

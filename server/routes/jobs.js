@@ -159,6 +159,27 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Batch delete jobs (admin only) - MUST be before /:id route
+router.delete('/batch', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'IDs array is required' });
+    }
+
+    const result = await Job.deleteMany({ _id: { $in: ids } });
+
+    res.json({
+      message: 'Jobs deleted successfully',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Batch delete jobs error:', error);
+    res.status(500).json({ error: 'Failed to delete jobs' });
+  }
+});
+
 // Delete job (admin only)
 router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
