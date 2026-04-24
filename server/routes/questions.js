@@ -399,6 +399,13 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
     // Handle answer_type logic
     const finalAnswerType = answer_type || 'single';
+    
+    // Ensure numeric fields are properly converted
+    const finalDifficultyLevel = difficulty_level !== undefined ? parseInt(difficulty_level, 10) : 5;
+    const finalTimeDuration = time_duration !== undefined && time_duration !== null ? parseInt(time_duration, 10) : null;
+    const finalCorrectAnswer = correct_answer !== undefined && correct_answer !== null ? parseInt(correct_answer, 10) : null;
+    const finalCorrectAnswers = correct_answers ? correct_answers.map(a => parseInt(a, 10)) : [];
+    
     const updateData = {
       question_text: finalQuestionText,
       question_text_hindi,
@@ -419,7 +426,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
       explanation_hindi,
       image_url,
       difficulty,
-      difficulty_level,
+      difficulty_level: finalDifficultyLevel,
       category_id,
       subject_id,
       topic_id,
@@ -427,18 +434,18 @@ router.put('/:id', requireAdmin, async (req, res) => {
       subject_ids,
       topic_ids,
       exam_names,
-      time_duration,
+      time_duration: finalTimeDuration,
       question_reference,
       updated_at: Date.now(),
     };
 
     // Handle correct_answer and correct_answers based on answer_type
     if (finalAnswerType === 'single') {
-      updateData.correct_answer = correct_answer;
+      updateData.correct_answer = finalCorrectAnswer;
       updateData.correct_answers = [];
     } else if (finalAnswerType === 'multiple') {
       updateData.correct_answer = null;
-      updateData.correct_answers = correct_answers || [];
+      updateData.correct_answers = finalCorrectAnswers;
     } else {
       // 'none' type
       updateData.correct_answer = null;
@@ -463,7 +470,13 @@ router.put('/:id', requireAdmin, async (req, res) => {
     res.json(question);
   } catch (error) {
     console.error('Update question error:', error);
-    res.status(500).json({ error: 'Failed to update question' });
+    console.error('Error details:', {
+      message: error.message,
+      errors: error.errors,
+      body: req.body,
+      updateData: updateData
+    });
+    res.status(500).json({ error: 'Failed to update question', details: error.message });
   }
 });
 
