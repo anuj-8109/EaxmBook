@@ -37,6 +37,7 @@ import Categories from "./pages/admin/Categories";
 import AdminTests from "./pages/admin/Tests";
 import AdminLiveTests from "./pages/admin/LiveTests";
 import Questions from "./pages/admin/Questions";
+import EditQuestion from "./pages/admin/EditQuestion";
 import Subjects from "./pages/admin/Subjects";
 import Topics from "./pages/admin/Topics";
 import AdminJobs from "./pages/admin/Jobs";
@@ -121,6 +122,7 @@ const App = () => (
             <Route path="/admin/live-tests" element={<ProtectedRoute adminOnly={true}><AdminLiveTests /></ProtectedRoute>} />
             <Route path="/admin/tests/:testId/assign" element={<ProtectedRoute adminOnly={true}><AssignQuestions /></ProtectedRoute>} />
             <Route path="/admin/questions" element={<ProtectedRoute adminOnly={true}><Questions /></ProtectedRoute>} />
+            <Route path="/admin/questions/edit/:id" element={<ProtectedRoute adminOnly={true}><EditQuestion /></ProtectedRoute>} />
             <Route path="/admin/jobs" element={<ProtectedRoute adminOnly={true}><AdminJobs /></ProtectedRoute>} />
             <Route path="/admin/materials" element={<ProtectedRoute adminOnly={true}><Materials /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute adminOnly={true}><Users /></ProtectedRoute>} />

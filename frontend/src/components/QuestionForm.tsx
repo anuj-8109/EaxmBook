@@ -402,11 +402,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0); // Force re-render when data loads
-  // Store initial names for display before API loads
-  const [initialCategoryName, setInitialCategoryName] = useState<string>('');
-  const [initialSubjectName, setInitialSubjectName] = useState<string>('');
-  const [initialTopicName, setInitialTopicName] = useState<string>('');
-
+  
   const [formData, setFormData] = useState<QuestionFormData>({
     exam_names: [],
     category_ids: [],
@@ -447,6 +443,11 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     hint_image_url: '',
     explanation_image_url: '',
   });
+
+  console.log("DEBUG QuestionForm - initialData category_ids:", initialData?.category_ids);
+  console.log("DEBUG QuestionForm - formData category_ids:", formData.category_ids);
+  console.log("DEBUG QuestionForm - allCategoriesFlat length:", allCategoriesFlat.length);
+
 
   useEffect(() => {
     fetchData();
@@ -514,12 +515,17 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
       );
       setShowHindi(hasHindiContent);
 
-      // Store initial names for display before API loads
-      setInitialCategoryName(initialData.category_names?.[0] || '');
-      setInitialSubjectName(initialData.subject_names?.[0] || '');
-      setInitialTopicName(initialData.topic_names?.[0] || '');
     }
   }, [initialData]);
+
+  useEffect(() => {
+    const catId = formData.category_ids?.[0];
+    if (catId) {
+      fetchSubjectsForCategory(String(catId));
+    } else {
+      fetchAllSubjects();
+    }
+  }, [formData.category_ids?.[0]]);
 
 
 
@@ -530,7 +536,17 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     return [];
   };
 
-
+  const fetchAllSubjects = async () => {
+    try {
+      const subs = await subjectsAPI.getAll(undefined, 1, 1000);
+      const normalizedSubs = normalizeArrayData(subs, 'subjects');
+      setSubjects(normalizedSubs);
+      setDataVersion(v => v + 1); // Force re-render
+    } catch (error: any) {
+      console.error('Failed to load subjects:', error);
+      toast.error('Failed to load subjects: ' + (error.message || 'Unknown error'));
+    }
+  };
 
   const fetchData = async () => {
     setDataLoading(true);
@@ -563,16 +579,16 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
           }
         });
       };
-      flatten(catsData || []);
+      flatten(normalizedCats || []);
       setAllCategoriesFlat(flat);
 
-      if (!catsData || catsData.length === 0) {
+      if (!normalizedCats || normalizedCats.length === 0) {
         toast.warning('No categories found');
       }
-      if (!subsData || subsData.length === 0) {
+      if (!normalizedSubjects || normalizedSubjects.length === 0) {
         toast.warning('No subjects found');
       }
-      if (!topsData || topsData.length === 0) {
+      if (!normalizedTopics || normalizedTopics.length === 0) {
         toast.warning('No topics found');
       }
     } catch (error: any) {
@@ -585,17 +601,17 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     }
   };
 
-  // Client-side filtering for subjects and topics for instant performance
-  const availableSubjects = useMemo(() => {
-    const selectedCatId = formData.category_ids[0];
-    if (!selectedCatId || selectedCatId === 'none') return subjects;
-    return subjects.filter(subject => {
-      const catId = typeof subject.category_id === 'object'
-        ? String((subject.category_id as any)._id || (subject.category_id as any).id)
-        : String(subject.category_id);
-      return catId === selectedCatId;
-    });
-  }, [subjects, formData.category_ids]);
+  const fetchSubjectsForCategory = async (catId: string) => {
+    try {
+      const subs = await subjectsAPI.getAll(catId, 1, 1000);
+      const normalizedSubs = normalizeArrayData(subs, 'subjects');
+      setSubjects(normalizedSubs);
+      setDataVersion(v => v + 1); // Force re-render
+    } catch (error: any) {
+      console.error('Failed to load subjects for category:', error);
+      toast.error('Failed to load subjects: ' + (error.message || 'Unknown error'));
+    }
+  };
 
   const filteredTopics = formData.subject_ids.length > 0
     ? topics.filter(topic => {
@@ -606,7 +622,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
         : String(subId);
       return formData.subject_ids.some(sid => String(sid) === topicSubId);
     })
-    : topics; // If no subject selected, show all (or keep as [] if you prefer strict filtering)
+    : [];
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -748,7 +764,8 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="category">Exam Category (Optional)</Label>
-                <Select value={formData.category_ids[0] || undefined} onValueChange={(val) => {
+                <Select value={formData.category_ids?.[0] ? String(formData.category_ids[0]) : "none"} onValueChange={(val) => {
+                  if (!val) return;
                   if (val === 'none') {
                     setFormData(prev => ({
                       ...prev,
@@ -776,12 +793,6 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                         {cat.name}
                       </SelectItem>
                     ))}
-                    {/* Fallback: Show selected category even if not in loaded list (during edit) */}
-                    {formData.category_ids[0] && !allCategoriesFlat.find(c => String(c.id) === String(formData.category_ids[0])) && (
-                      <SelectItem key={formData.category_ids[0]} value={formData.category_ids[0]}>
-                        {initialCategoryName || '(Loading...)'}
-                      </SelectItem>
-                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -810,8 +821,11 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
               <div className="space-y-2">
                 <Label htmlFor="subject">Subject (Optional)</Label>
                 <Select
-                  value={formData.subject_ids[0] || undefined}
-                  onValueChange={(val) => setFormData(prev => ({ ...prev, subject_ids: val ? [val] : [], subject_id: val || null, topic_ids: [], topic_id: null }))}
+                  value={formData.subject_ids?.[0] ? String(formData.subject_ids[0]) : "none"}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    setFormData(prev => ({ ...prev, subject_ids: val !== 'none' ? [val] : [], subject_id: val !== 'none' ? val : null, topic_ids: [], topic_id: null }));
+                  }}
                 >
                   <SelectTrigger id="subject" className="rounded-xl">
                     <SelectValue placeholder="Select subject (optional)" />
@@ -828,23 +842,18 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                         Error: {dataError}
                       </div>
                     )}
-                    {!dataLoading && !dataError && availableSubjects.length === 0 && (
+                    {!dataLoading && !dataError && subjects.length === 0 && (
                       <div className="py-6 px-2 text-center text-sm text-muted-foreground">
                         No subjects available<br />
                         <span className="text-xs">Please create subjects in Admin → Subjects</span>
                       </div>
                     )}
-                    {!dataLoading && availableSubjects.map(sub => (
+                    <SelectItem value="none">None</SelectItem>
+                    {!dataLoading && subjects.map(sub => (
                       <SelectItem key={String(sub._id || sub.id)} value={String(sub._id || sub.id)}>
                         {sub.name}
                       </SelectItem>
                     ))}
-                    {/* Fallback: Show selected subject even if not in loaded list (during edit) */}
-                    {formData.subject_ids[0] && !availableSubjects.find(s => String(s._id || s.id) === String(formData.subject_ids[0])) && (
-                      <SelectItem key={formData.subject_ids[0]} value={formData.subject_ids[0]}>
-                        {initialSubjectName || '(Loading...)'}
-                      </SelectItem>
-                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -854,8 +863,11 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                   Topic {formData.subject_ids.length > 0 && <span className="text-muted-foreground text-xs">(Required for Basic to Advance)</span>}
                 </Label>
                 <Select
-                  value={formData.topic_ids[0] || undefined}
-                  onValueChange={(val) => setFormData(prev => ({ ...prev, topic_ids: val ? [val] : [], topic_id: val || null }))}
+                  value={formData.topic_ids?.[0] ? String(formData.topic_ids[0]) : "none"}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    setFormData(prev => ({ ...prev, topic_ids: val !== 'none' ? [val] : [], topic_id: val !== 'none' ? val : null }));
+                  }}
                   disabled={formData.subject_ids.length === 0}
                 >
                   <SelectTrigger id="topic" className="rounded-xl">
@@ -879,17 +891,12 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                         <span className="text-xs">Please create topics in Admin → Topics</span>
                       </div>
                     )}
+                    <SelectItem value="none">None</SelectItem>
                     {!dataLoading && filteredTopics.map(topic => (
                       <SelectItem key={String(topic._id || topic.id)} value={String(topic._id || topic.id)}>
                         {topic.name}
                       </SelectItem>
                     ))}
-                    {/* Fallback: Show selected topic even if not in filtered list (during edit) */}
-                    {formData.topic_ids[0] && !filteredTopics.find(t => String(t._id || t.id) === String(formData.topic_ids[0])) && (
-                      <SelectItem key={formData.topic_ids[0]} value={formData.topic_ids[0]}>
-                        {initialTopicName || '(Loading...)'}
-                      </SelectItem>
-                    )}
                   </SelectContent>
                 </Select>
                 {formData.subject_ids.length > 0 && !formData.topic_ids[0] && (

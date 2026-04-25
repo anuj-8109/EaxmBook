@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,7 @@ interface Question {
 }
 
 const Questions = () => {
+  const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -253,20 +255,12 @@ const Questions = () => {
     }
   };
 
-  const handleEdit = async (question: Question) => {
-    try {
-      setLoading(true);
-      const fullQuestion = await questionsAPI.getById(String(question._id || (question as any).id));
-      setEditingQuestion(fullQuestion);
-      setShowForm(true);
-      setActiveTab('add');
-    } catch (error: any) {
-      console.error('Failed to fetch full question details:', error);
-      setEditingQuestion(question);
-      setShowForm(true);
-      setActiveTab('add');
-    } finally {
-      setLoading(false);
+  const handleEdit = (question: Question) => {
+    const questionId = question._id || (question as any).id;
+    if (questionId) {
+      navigate(`/admin/questions/edit/${questionId}`);
+    } else {
+      showError('Cannot edit this question', 'Invalid Question ID');
     }
   };
 

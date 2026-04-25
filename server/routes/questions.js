@@ -90,11 +90,7 @@ router.get('/:id', async (req, res) => {
   try {
     const question = await Question.findById(req.params.id)
       .populate('category_id')
-      .populate('subject_id')
-      .populate('topic_id')
-      .populate('category_ids')
-      .populate('subject_ids')
-      .populate('topic_ids');
+      .populate('subject_id');
     
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
