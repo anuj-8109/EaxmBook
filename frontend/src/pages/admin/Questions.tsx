@@ -53,6 +53,15 @@ interface Question {
   category_id?: any;
   subject_id?: any;
   topic_id?: any;
+  question_image_url?: string;
+  question_video_url?: string;
+  option_a_image_url?: string;
+  option_b_image_url?: string;
+  option_c_image_url?: string;
+  option_d_image_url?: string;
+  option_x_image_url?: string;
+  hint_image_url?: string;
+  explanation_image_url?: string;
 }
 
 const Questions = () => {
@@ -151,6 +160,15 @@ const Questions = () => {
       hint_hindi: editingQuestion.hint_hindi || '',
       explanation: editingQuestion.explanation || '',
       explanation_hindi: editingQuestion.explanation_hindi || '',
+      question_image_url: editingQuestion.question_image_url || '',
+      question_video_url: editingQuestion.question_video_url || '',
+      option_a_image_url: editingQuestion.option_a_image_url || '',
+      option_b_image_url: editingQuestion.option_b_image_url || '',
+      option_c_image_url: editingQuestion.option_c_image_url || '',
+      option_d_image_url: editingQuestion.option_d_image_url || '',
+      option_x_image_url: editingQuestion.option_x_image_url || '',
+      hint_image_url: editingQuestion.hint_image_url || '',
+      explanation_image_url: editingQuestion.explanation_image_url || '',
     };
   }, [editingQuestion]);
 
@@ -238,7 +256,7 @@ const Questions = () => {
   const handleEdit = async (question: Question) => {
     try {
       setLoading(true);
-      const fullQuestion = await questionsAPI.getOne(String(question._id || (question as any).id));
+      const fullQuestion = await questionsAPI.getById(String(question._id || (question as any).id));
       setEditingQuestion(fullQuestion);
       setShowForm(true);
       setActiveTab('add');
