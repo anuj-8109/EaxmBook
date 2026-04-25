@@ -50,6 +50,9 @@ interface Question {
   category_ids?: any[];
   subject_ids?: any[];
   topic_ids?: any[];
+  category_id?: any;
+  subject_id?: any;
+  topic_id?: any;
 }
 
 const Questions = () => {
@@ -74,15 +77,58 @@ const Questions = () => {
   // Memoize initialData to prevent unnecessary re-renders of QuestionForm
   const questionFormInitialData = useMemo(() => {
     if (!editingQuestion) return undefined;
+
+    console.log('DEBUG: RAW editingQuestion for memo:', editingQuestion);
+
+    // Helper to extract ID as string from various possible field formats
+    const extractId = (item: any) => {
+      if (!item) return null;
+      if (typeof item === 'string') return item;
+      return item._id || item.id || null;
+    };
+
+    // Helper to extract name from various possible field formats
+    const extractName = (item: any) => {
+      if (!item || typeof item === 'string') return null;
+      return item.name || null;
+    };
+
+    // Extract category IDs and names (merging singular and plural fields)
+    const allCategoryItems = [
+      ...(Array.isArray(editingQuestion.category_ids) ? editingQuestion.category_ids : []),
+      ...(editingQuestion.category_id ? [editingQuestion.category_id] : [])
+    ];
+    const categoryIds = Array.from(new Set(allCategoryItems.map(extractId).filter(Boolean))) as string[];
+    const categoryNames = allCategoryItems.map(extractName).filter(Boolean) as string[];
+
+    // Extract subject IDs and names (merging singular and plural fields)
+    const allSubjectItems = [
+      ...(Array.isArray(editingQuestion.subject_ids) ? editingQuestion.subject_ids : []),
+      ...(editingQuestion.subject_id ? [editingQuestion.subject_id] : [])
+    ];
+    const subjectIds = Array.from(new Set(allSubjectItems.map(extractId).filter(Boolean))) as string[];
+    const subjectNames = allSubjectItems.map(extractName).filter(Boolean) as string[];
+
+    // Extract topic IDs and names (merging singular and plural fields)
+    const allTopicItems = [
+      ...(Array.isArray(editingQuestion.topic_ids) ? editingQuestion.topic_ids : []),
+      ...(editingQuestion.topic_id ? [editingQuestion.topic_id] : [])
+    ];
+    const topicIds = Array.from(new Set(allTopicItems.map(extractId).filter(Boolean))) as string[];
+    const topicNames = allTopicItems.map(extractName).filter(Boolean) as string[];
+
     return {
+      _id: editingQuestion._id,
       exam_names: editingQuestion.exam_names || [],
-      category_ids: editingQuestion.category_ids?.map((c: any) => c._id || c.id || c) || [],
-      subject_ids: editingQuestion.subject_ids?.map((s: any) => s._id || s.id || s) || [],
-      topic_ids: editingQuestion.topic_ids?.map((t: any) => t._id || t.id || t) || [],
-      // Include names for display before API loads
-      category_names: editingQuestion.category_ids?.map((c: any) => c.name) || [],
-      subject_names: editingQuestion.subject_ids?.map((s: any) => s.name) || [],
-      topic_names: editingQuestion.topic_ids?.map((t: any) => t.name) || [],
+      category_ids: categoryIds,
+      subject_ids: subjectIds,
+      topic_ids: topicIds,
+      category_id: categoryIds[0] || null,
+      subject_id: subjectIds[0] || null,
+      topic_id: topicIds[0] || null,
+      category_names: categoryNames,
+      subject_names: subjectNames,
+      topic_names: topicNames,
       time_duration: editingQuestion.time_duration || null,
       difficulty_level: editingQuestion.difficulty_level || 5,
       question_reference: editingQuestion.question_reference || '',
@@ -189,10 +235,21 @@ const Questions = () => {
     }
   };
 
-  const handleEdit = (question: Question) => {
-    setEditingQuestion(question);
-    setShowForm(true);
-    setActiveTab('add');
+  const handleEdit = async (question: Question) => {
+    try {
+      setLoading(true);
+      const fullQuestion = await questionsAPI.getOne(String(question._id || (question as any).id));
+      setEditingQuestion(fullQuestion);
+      setShowForm(true);
+      setActiveTab('add');
+    } catch (error: any) {
+      console.error('Failed to fetch full question details:', error);
+      setEditingQuestion(question);
+      setShowForm(true);
+      setActiveTab('add');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (questionId: string) => {

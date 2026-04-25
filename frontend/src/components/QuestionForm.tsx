@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,18 +27,18 @@ declare global {
 }
 
 /* ── Math Input Component ── */
-const MathInput = ({ 
-  value, 
-  onChange, 
-  placeholder, 
+const MathInput = ({
+  value,
+  onChange,
+  placeholder,
   className = "",
   compact = false
-}: { 
-  value: string; 
-  onChange: (val: string) => void; 
-  placeholder?: string; 
-  className?: string; 
-  compact?: boolean; 
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  compact?: boolean;
 }) => {
   const [showPreview, setShowPreview] = useState(false);
   const [showMathEditor, setShowMathEditor] = useState(false);
@@ -59,7 +59,7 @@ const MathInput = ({
   };
 
   const updateTableSize = (rows: number, cols: number) => {
-    const newData = Array(rows).fill(0).map((_, r) => 
+    const newData = Array(rows).fill(0).map((_, r) =>
       Array(cols).fill(0).map((_, c) => (tableData[r] && tableData[r][c]) || '')
     );
     setTableRows(rows);
@@ -143,23 +143,23 @@ const MathInput = ({
               <div className="flex gap-4 mb-6 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border">
                 <div className="space-y-1">
                   <Label className="text-[11px] font-bold uppercase tracking-wider opacity-60">Rows</Label>
-                  <Input 
-                    type="number" 
-                    value={tableRows} 
-                    min={1} 
+                  <Input
+                    type="number"
+                    value={tableRows}
+                    min={1}
                     max={20}
-                    onChange={(e) => updateTableSize(parseInt(e.target.value) || 1, tableCols)} 
+                    onChange={(e) => updateTableSize(parseInt(e.target.value) || 1, tableCols)}
                     className="w-20 rounded-xl border-primary/20"
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[11px] font-bold uppercase tracking-wider opacity-60">Columns</Label>
-                  <Input 
-                    type="number" 
-                    value={tableCols} 
-                    min={1} 
+                  <Input
+                    type="number"
+                    value={tableCols}
+                    min={1}
                     max={10}
-                    onChange={(e) => updateTableSize(tableRows, parseInt(e.target.value) || 1)} 
+                    onChange={(e) => updateTableSize(tableRows, parseInt(e.target.value) || 1)}
                     className="w-20 rounded-xl border-primary/20"
                   />
                 </div>
@@ -174,8 +174,8 @@ const MathInput = ({
                     <tr>
                       {Array(tableCols).fill(0).map((_, c) => (
                         <th key={c} className="p-2 border bg-muted/30">
-                          <Input 
-                            placeholder={`Header ${c+1}`}
+                          <Input
+                            placeholder={`Header ${c + 1}`}
                             value={tableData[0][c]}
                             onChange={(e) => {
                               const newData = [...tableData];
@@ -193,11 +193,11 @@ const MathInput = ({
                       <tr key={r}>
                         {Array(tableCols).fill(0).map((_, c) => (
                           <td key={c} className="p-1 border border-slate-100 dark:border-slate-800">
-                            <Input 
-                              value={tableData[r+1][c]}
+                            <Input
+                              value={tableData[r + 1][c]}
                               onChange={(e) => {
                                 const newData = [...tableData];
-                                newData[r+1][c] = e.target.value;
+                                newData[r + 1][c] = e.target.value;
                                 setTableData(newData);
                               }}
                               className="h-8 text-xs border-none bg-transparent focus:bg-white dark:focus:bg-slate-900"
@@ -245,7 +245,7 @@ const MathInput = ({
         ) : (
           <>
             {compact ? (
-              <Input 
+              <Input
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder || "Use $ for math..."}
@@ -262,14 +262,14 @@ const MathInput = ({
           </>
         )}
       </div>
-      
+
       {showPreview && value && (
         <div className="p-4 rounded-2xl border border-primary/20 bg-primary/5 dark:bg-primary/10 animate-in fade-in slide-in-from-top-1">
           <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto">
-            <ReactMarkdown 
+            <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                p: ({children}) => {
+                p: ({ children }) => {
                   const content = Array.isArray(children) ? children.join('') : (children?.toString() || '');
                   return (
                     <p className="mb-2 last:mb-0">
@@ -285,15 +285,15 @@ const MathInput = ({
                     </p>
                   );
                 },
-                table: ({children}) => (
+                table: ({ children }) => (
                   <div className="my-4 overflow-x-auto rounded-xl border border-primary/20 shadow-sm bg-white dark:bg-slate-900">
                     <table className="min-w-full divide-y divide-primary/10">{children}</table>
                   </div>
                 ),
-                thead: ({children}) => <thead className="bg-primary/5 dark:bg-primary/20">{children}</thead>,
-                th: ({children}) => <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-primary">{children}</th>,
-                td: ({children}) => <td className="px-4 py-3 text-sm border-t border-primary/5 dark:border-primary/10">{children}</td>,
-                tr: ({children}) => <tr className="hover:bg-primary/[0.02] transition-colors">{children}</tr>,
+                thead: ({ children }) => <thead className="bg-primary/5 dark:bg-primary/20">{children}</thead>,
+                th: ({ children }) => <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-primary">{children}</th>,
+                td: ({ children }) => <td className="px-4 py-3 text-sm border-t border-primary/5 dark:border-primary/10">{children}</td>,
+                tr: ({ children }) => <tr className="hover:bg-primary/[0.02] transition-colors">{children}</tr>,
               }}
             >
               {value}
@@ -303,7 +303,7 @@ const MathInput = ({
       )}
       {!showMathEditor && (
         <p className="text-[9px] text-muted-foreground mt-1">
-          Tip: Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">$...$</code> for math. 
+          Tip: Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">$...$</code> for math.
           Example: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">$\frac{2}{3}$</code>.
         </p>
       )}
@@ -340,6 +340,9 @@ interface QuestionFormData {
   category_ids: string[];
   subject_ids: string[];
   topic_ids: string[];
+  category_id?: string | null;
+  subject_id?: string | null;
+  topic_id?: string | null;
   // Optional names for initial display before API loads
   category_names?: string[];
   subject_names?: string[];
@@ -378,7 +381,7 @@ interface QuestionFormData {
 }
 
 interface QuestionFormProps {
-  initialData?: Partial<QuestionFormData>;
+  initialData?: QuestionFormData & { _id?: string };
   onSubmit: (data: QuestionFormData) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
@@ -387,12 +390,12 @@ interface QuestionFormProps {
 export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: QuestionFormProps) => {
   const renderCount = useRef(0);
   renderCount.current++;
-  console.log(`DEBUG RENDER #${renderCount.current}: initialData=`, initialData);
+  const lastInitializedId = useRef<string | null>(null);
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [allCategoriesFlat, setAllCategoriesFlat] = useState<Array<{ id: string; name: string; icon?: string }>>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [showHindi, setShowHindi] = useState(false);
@@ -403,12 +406,15 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
   const [initialCategoryName, setInitialCategoryName] = useState<string>('');
   const [initialSubjectName, setInitialSubjectName] = useState<string>('');
   const [initialTopicName, setInitialTopicName] = useState<string>('');
-  
+
   const [formData, setFormData] = useState<QuestionFormData>({
     exam_names: [],
     category_ids: [],
     subject_ids: [],
     topic_ids: [],
+    category_id: null,
+    subject_id: null,
+    topic_id: null,
     time_duration: null,
     difficulty_level: 5,
     question_reference: '',
@@ -447,14 +453,21 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
   }, []);
 
   useEffect(() => {
-    console.log('DEBUG: initialData received:', initialData);
     if (initialData) {
-      console.log('DEBUG: Setting formData with subject_ids:', initialData.subject_ids, 'topic_ids:', initialData.topic_ids);
+      const currentId = initialData._id || 'new';
+      if (lastInitializedId.current === currentId && currentId !== 'new') {
+        return;
+      }
+      lastInitializedId.current = currentId;
+
       setFormData({
         exam_names: initialData.exam_names || [],
         category_ids: initialData.category_ids || [],
         subject_ids: initialData.subject_ids || [],
         topic_ids: initialData.topic_ids || [],
+        category_id: initialData.category_id || (initialData.category_ids?.[0] || null),
+        subject_id: initialData.subject_id || (initialData.subject_ids?.[0] || null),
+        topic_id: initialData.topic_id || (initialData.topic_ids?.[0] || null),
         time_duration: initialData.time_duration ?? null,
         difficulty_level: initialData.difficulty_level || 5,
         question_reference: initialData.question_reference || '',
@@ -505,34 +518,10 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
       setInitialCategoryName(initialData.category_names?.[0] || '');
       setInitialSubjectName(initialData.subject_names?.[0] || '');
       setInitialTopicName(initialData.topic_names?.[0] || '');
-      console.log('DEBUG: Set initial names - cat:', initialData.category_names?.[0], 'sub:', initialData.subject_names?.[0], 'top:', initialData.topic_names?.[0]);
     }
   }, [initialData]);
 
-  useEffect(() => {
-    console.log('DEBUG: category effect - initialData:', initialData);
-    if (initialData?.category_ids && initialData.category_ids.length > 0) {
-      console.log('DEBUG: Setting category and fetching ALL subjects (for edit mode):', initialData.category_ids[0]);
-      setSelectedCategoryId(initialData.category_ids[0]);
-      // When editing, fetch ALL subjects to ensure the question's subject is in the list
-      fetchAllSubjects();
-    } else if (initialData === undefined) {
-      setSelectedCategoryId('');
-      setShowHindi(false);
-      fetchAllSubjects();
-    } else {
-      setSelectedCategoryId('');
-      fetchAllSubjects();
-    }
-  }, [initialData]);
 
-  useEffect(() => {
-    if (selectedCategoryId) {
-      fetchSubjectsForCategory(selectedCategoryId);
-    } else {
-      fetchAllSubjects();
-    }
-  }, [selectedCategoryId]);
 
   const normalizeArrayData = (data: any, fieldName: string): any[] => {
     if (Array.isArray(data)) return data;
@@ -541,19 +530,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     return [];
   };
 
-  const fetchAllSubjects = async () => {
-    try {
-      const subs = await subjectsAPI.getAll(undefined, 1, 1000);
-      console.log('DEBUG: Fetched all subjects:', subs);
-      const normalizedSubs = normalizeArrayData(subs, 'subjects');
-      console.log('DEBUG: Normalized subjects:', normalizedSubs.length);
-      setSubjects(normalizedSubs);
-      setDataVersion(v => v + 1); // Force re-render
-    } catch (error: any) {
-      console.error('Failed to load subjects:', error);
-      toast.error('Failed to load subjects: ' + (error.message || 'Unknown error'));
-    }
-  };
+
 
   const fetchData = async () => {
     setDataLoading(true);
@@ -567,11 +544,11 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
       const normalizedCats = normalizeArrayData(catsData, 'categories');
       const normalizedTopics = normalizeArrayData(topsData, 'topics');
       const normalizedSubjects = normalizeArrayData(subsData, 'subjects');
-      
+
       setCategories(normalizedCats);
       setTopics(normalizedTopics);
       setSubjects(normalizedSubjects);
-      
+
       // Flatten categories
       const flat: Array<{ id: string; name: string; icon?: string }> = [];
       const flatten = (cats: Category[]) => {
@@ -588,7 +565,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
       };
       flatten(catsData || []);
       setAllCategoriesFlat(flat);
-      
+
       if (!catsData || catsData.length === 0) {
         toast.warning('No categories found');
       }
@@ -608,74 +585,73 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     }
   };
 
-  const fetchSubjectsForCategory = async (catId: string) => {
-    try {
-      const subs = await subjectsAPI.getAll(catId, 1, 1000);
-      console.log('Fetched subjects for category', catId, ':', subs);
-      const normalizedSubs = normalizeArrayData(subs, 'subjects');
-      console.log('Normalized subjects for category:', normalizedSubs.length);
-      setSubjects(normalizedSubs);
-      setDataVersion(v => v + 1); // Force re-render
-    } catch (error: any) {
-      console.error('Failed to load subjects for category:', error);
-      toast.error('Failed to load subjects: ' + (error.message || 'Unknown error'));
-    }
-  };
+  // Client-side filtering for subjects and topics for instant performance
+  const availableSubjects = useMemo(() => {
+    const selectedCatId = formData.category_ids[0];
+    if (!selectedCatId || selectedCatId === 'none') return subjects;
+    return subjects.filter(subject => {
+      const catId = typeof subject.category_id === 'object'
+        ? String((subject.category_id as any)._id || (subject.category_id as any).id)
+        : String(subject.category_id);
+      return catId === selectedCatId;
+    });
+  }, [subjects, formData.category_ids]);
 
   const filteredTopics = formData.subject_ids.length > 0
     ? topics.filter(topic => {
-        const subId = topic.subject_id;
-        if (!subId) return false;
-        const topicSubId = typeof subId === 'object'
-          ? String((subId as any)._id || (subId as any).id)
-          : String(subId);
-        return formData.subject_ids.some(sid => String(sid) === topicSubId);
-      })
-    : [];
+      const subId = topic.subject_id;
+      if (!subId) return false;
+      const topicSubId = typeof subId === 'object'
+        ? String((subId as any)._id || (subId as any).id)
+        : String(subId);
+      return formData.subject_ids.some(sid => String(sid) === topicSubId);
+    })
+    : topics; // If no subject selected, show all (or keep as [] if you prefer strict filtering)
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Helper function to check if a string is not empty
     const isNotEmpty = (str: string) => str && str.trim().length > 0;
-    
+
     // Validate that at least English or Hindi question text is provided
     if (!isNotEmpty(formData.question_text) && !isNotEmpty(formData.question_text_hindi)) {
       toast.error('Please provide question text in English or Hindi (or both)');
       return;
     }
-    
+
     // Validate that at least English or Hindi options are provided
-    const hasEnglishOptions = isNotEmpty(formData.option_a) || isNotEmpty(formData.option_b) || 
-                              isNotEmpty(formData.option_c) || isNotEmpty(formData.option_d);
-    const hasHindiOptions = isNotEmpty(formData.option_a_hindi) || isNotEmpty(formData.option_b_hindi) || 
-                            isNotEmpty(formData.option_c_hindi) || isNotEmpty(formData.option_d_hindi);
-    
+    const hasEnglishOptions = isNotEmpty(formData.option_a) || isNotEmpty(formData.option_b) ||
+      isNotEmpty(formData.option_c) || isNotEmpty(formData.option_d);
+    const hasHindiOptions = isNotEmpty(formData.option_a_hindi) || isNotEmpty(formData.option_b_hindi) ||
+      isNotEmpty(formData.option_c_hindi) || isNotEmpty(formData.option_d_hindi);
+
     if (!hasEnglishOptions && !hasHindiOptions) {
       toast.error('Please provide at least one option in English or Hindi');
       return;
     }
-    
+
     // If English options are provided, all 4 should be filled
     if (hasEnglishOptions) {
-      if (!isNotEmpty(formData.option_a) || !isNotEmpty(formData.option_b) || 
-          !isNotEmpty(formData.option_c) || !isNotEmpty(formData.option_d)) {
+      if (!isNotEmpty(formData.option_a) || !isNotEmpty(formData.option_b) ||
+        !isNotEmpty(formData.option_c) || !isNotEmpty(formData.option_d)) {
         toast.error('Please fill all 4 options (A, B, C, D) in English');
         return;
       }
     }
-    
+
     // If Hindi options are provided, all 4 should be filled
     if (hasHindiOptions) {
-      if (!isNotEmpty(formData.option_a_hindi) || !isNotEmpty(formData.option_b_hindi) || 
-          !isNotEmpty(formData.option_c_hindi) || !isNotEmpty(formData.option_d_hindi)) {
+      if (!isNotEmpty(formData.option_a_hindi) || !isNotEmpty(formData.option_b_hindi) ||
+        !isNotEmpty(formData.option_c_hindi) || !isNotEmpty(formData.option_d_hindi)) {
         toast.error('Please fill all 4 options (A, B, C, D) in Hindi');
         return;
       }
     }
-    
+
     // Exam Category is now optional, so we don't validate it
-    
+
     // Validate correct answer based on answer_type
     if (formData.answer_type === 'single') {
       if (formData.correct_answer === null || formData.correct_answer === undefined) {
@@ -689,7 +665,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
       }
     }
     // 'none' type doesn't require any correct answer
-    
+
     await onSubmit(formData);
   };
 
@@ -698,7 +674,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
     try {
       let contextSubject = 'General';
       let contextTopic = 'General Topic';
-      
+
       if (formData.subject_ids[0]) {
         const sub = subjects.find(s => (s._id || s.id)?.toString() === formData.subject_ids[0]);
         if (sub) contextSubject = sub.name;
@@ -707,11 +683,11 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
         const top = topics.find(t => (t._id || t.id)?.toString() === formData.topic_ids[0]);
         if (top) contextTopic = top.name;
       }
-      
+
       const response = await aiAPI.generate({
         type: 'questions',
-        context: { 
-          subject: contextSubject, 
+        context: {
+          subject: contextSubject,
           topic: contextTopic,
           difficulty: formData.difficulty_level || 5
         },
@@ -756,11 +732,11 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-2 border-b">
               <h3 className="text-base font-semibold">Basic Information</h3>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm" 
-                onClick={handleAiSuggest} 
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAiSuggest}
                 disabled={aiLoading}
                 className="bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary"
               >
@@ -768,31 +744,29 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 Auto-fill Question via AI
               </Button>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="category">Exam Category (Optional)</Label>
-                <Select value={selectedCategoryId || undefined} onValueChange={(val) => {
+                <Select value={formData.category_ids[0] || undefined} onValueChange={(val) => {
                   if (val === 'none') {
-                    setSelectedCategoryId('');
                     setFormData(prev => ({
                       ...prev,
                       category_ids: [],
+                      category_id: null,
                       exam_names: []
                     }));
                   } else {
-                    setSelectedCategoryId(val);
                     setFormData(prev => ({
                       ...prev,
                       category_ids: [val],
+                      category_id: val,
                       exam_names: [allCategoriesFlat.find(c => c.id === val)?.name || '']
                     }));
                   }
                 }}>
                   <SelectTrigger id="category" className="rounded-xl">
-                    <SelectValue placeholder="Select exam category (optional)">
-                      {(selectedCategoryId && (allCategoriesFlat.find(c => c.id === selectedCategoryId)?.name || initialCategoryName)) || ''}
-                    </SelectValue>
+                    <SelectValue placeholder="Select exam category (optional)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
@@ -803,8 +777,8 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                       </SelectItem>
                     ))}
                     {/* Fallback: Show selected category even if not in loaded list (during edit) */}
-                    {selectedCategoryId && !allCategoriesFlat.find(c => String(c.id) === String(selectedCategoryId)) && (
-                      <SelectItem key={selectedCategoryId} value={selectedCategoryId}>
+                    {formData.category_ids[0] && !allCategoriesFlat.find(c => String(c.id) === String(formData.category_ids[0])) && (
+                      <SelectItem key={formData.category_ids[0]} value={formData.category_ids[0]}>
                         {initialCategoryName || '(Loading...)'}
                       </SelectItem>
                     )}
@@ -814,8 +788,8 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
 
               <div className="space-y-2">
                 <Label htmlFor="difficulty">Difficulty Level *</Label>
-                <Select 
-                  value={formData.difficulty_level.toString()} 
+                <Select
+                  value={formData.difficulty_level.toString()}
                   onValueChange={(val) => setFormData(prev => ({ ...prev, difficulty_level: parseInt(val) }))}
                 >
                   <SelectTrigger id="difficulty" className="rounded-xl">
@@ -837,12 +811,10 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 <Label htmlFor="subject">Subject (Optional)</Label>
                 <Select
                   value={formData.subject_ids[0] || undefined}
-                  onValueChange={(val) => setFormData(prev => ({ ...prev, subject_ids: val ? [val] : [], topic_ids: [] }))}
+                  onValueChange={(val) => setFormData(prev => ({ ...prev, subject_ids: val ? [val] : [], subject_id: val || null, topic_ids: [], topic_id: null }))}
                 >
                   <SelectTrigger id="subject" className="rounded-xl">
-                    <SelectValue placeholder="Select subject (optional)">
-                      {(formData.subject_ids[0] && (subjects.find(s => String(s._id || s.id) === String(formData.subject_ids[0]))?.name || initialSubjectName)) || ''}
-                    </SelectValue>
+                    <SelectValue placeholder="Select subject (optional)" />
                   </SelectTrigger>
                   <SelectContent>
                     {dataLoading && (
@@ -856,19 +828,19 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                         Error: {dataError}
                       </div>
                     )}
-                    {!dataLoading && !dataError && subjects.length === 0 && (
+                    {!dataLoading && !dataError && availableSubjects.length === 0 && (
                       <div className="py-6 px-2 text-center text-sm text-muted-foreground">
-                        No subjects available<br/>
+                        No subjects available<br />
                         <span className="text-xs">Please create subjects in Admin → Subjects</span>
                       </div>
                     )}
-                    {!dataLoading && subjects.map(sub => (
+                    {!dataLoading && availableSubjects.map(sub => (
                       <SelectItem key={String(sub._id || sub.id)} value={String(sub._id || sub.id)}>
                         {sub.name}
                       </SelectItem>
                     ))}
                     {/* Fallback: Show selected subject even if not in loaded list (during edit) */}
-                    {formData.subject_ids[0] && !subjects.find(s => String(s._id || s.id) === String(formData.subject_ids[0])) && (
+                    {formData.subject_ids[0] && !availableSubjects.find(s => String(s._id || s.id) === String(formData.subject_ids[0])) && (
                       <SelectItem key={formData.subject_ids[0]} value={formData.subject_ids[0]}>
                         {initialSubjectName || '(Loading...)'}
                       </SelectItem>
@@ -883,13 +855,11 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 </Label>
                 <Select
                   value={formData.topic_ids[0] || undefined}
-                  onValueChange={(val) => setFormData(prev => ({ ...prev, topic_ids: val ? [val] : [] }))}
+                  onValueChange={(val) => setFormData(prev => ({ ...prev, topic_ids: val ? [val] : [], topic_id: val || null }))}
                   disabled={formData.subject_ids.length === 0}
                 >
                   <SelectTrigger id="topic" className="rounded-xl">
-                    <SelectValue placeholder={formData.subject_ids.length > 0 ? "Select topic" : "Select subject first"}>
-                      {(formData.topic_ids[0] && ((filteredTopics.find(t => String(t._id || t.id) === String(formData.topic_ids[0])) || topics.find(t => String(t._id || t.id) === String(formData.topic_ids[0])))?.name || initialTopicName)) || ''}
-                    </SelectValue>
+                    <SelectValue placeholder={formData.subject_ids.length > 0 ? "Select topic" : "Select subject first"} />
                   </SelectTrigger>
                   <SelectContent>
                     {dataLoading && (
@@ -905,7 +875,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                     )}
                     {!dataLoading && !dataError && filteredTopics.length === 0 && formData.subject_ids.length > 0 && (
                       <div className="py-6 px-2 text-center text-sm text-muted-foreground">
-                        No topics available for this subject.<br/>
+                        No topics available for this subject.<br />
                         <span className="text-xs">Please create topics in Admin → Topics</span>
                       </div>
                     )}
@@ -964,7 +934,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 <Label htmlFor="hindi-mode" className="cursor-pointer font-medium text-sm">Add Hindi Translation</Label>
               </div>
             </div>
-            
+
             <div className={`grid grid-cols-1 ${showHindi ? 'md:grid-cols-2' : ''} gap-4`}>
               <div className="space-y-2">
                 <Label htmlFor="question_text">English (Optional)</Label>
@@ -1065,9 +1035,9 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 </div>
                 {formData.question_image_url && (
                   <div className="mt-2 rounded-lg overflow-hidden border border-border/50">
-                    <img 
-                      src={formData.question_image_url} 
-                      alt="Question preview" 
+                    <img
+                      src={formData.question_image_url}
+                      alt="Question preview"
                       className="w-full h-32 object-contain bg-muted"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
@@ -1105,8 +1075,8 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 </div>
                 {formData.question_video_url && (
                   <div className="mt-2 rounded-lg overflow-hidden border border-border/50">
-                    <video 
-                      src={formData.question_video_url} 
+                    <video
+                      src={formData.question_video_url}
                       className="w-full h-32 object-contain bg-muted"
                       controls
                       onError={(e) => {
@@ -1129,7 +1099,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-semibold">Options (Optional)</h3>
               </div>
-              
+
               {/* Answer Type Selector */}
               <div className="flex items-center gap-2 bg-muted/50 px-3 py-2 rounded-xl border border-border/50">
                 <Label className="text-sm font-semibold text-foreground">Answer Type:</Label>
@@ -1187,37 +1157,34 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 Current Mode: {formData.answer_type} | Selected: {formData.correct_answers?.length || 0} answers
               </p>
             </div>
-            
+
             <div className="space-y-4">
               {options.map((opt, idx) => {
                 const optionImageField = `${opt.field}_image_url` as keyof QuestionFormData;
                 const optionImageUrl = formData[optionImageField] as string;
-                
+
                 // Determine if this option is marked correct based on answer type
                 const correctAnswersArray = formData.correct_answers || [];
-                const isCorrect = formData.answer_type === 'single' 
+                const isCorrect = formData.answer_type === 'single'
                   ? formData.correct_answer === idx
                   : formData.answer_type === 'multiple'
                     ? correctAnswersArray.includes(idx)
                     : false;
-                
+
                 const handleToggleCorrect = () => {
-                  console.log('Toggle clicked for option', idx, 'answer_type:', formData.answer_type);
                   if (formData.answer_type === 'single') {
                     setFormData(prev => ({ ...prev, correct_answer: idx }));
                   } else if (formData.answer_type === 'multiple') {
                     setFormData(prev => {
                       const currentAnswers = prev.correct_answers || [];
-                      console.log('Current answers:', currentAnswers);
                       const newAnswers = currentAnswers.includes(idx)
                         ? currentAnswers.filter(a => a !== idx)
                         : [...currentAnswers, idx];
-                      console.log('New answers:', newAnswers);
                       return { ...prev, correct_answers: newAnswers };
                     });
                   }
                 };
-                
+
                 return (
                   <div key={opt.key} className={`space-y-2 p-4 border rounded-xl bg-muted/30 transition-colors ${isCorrect ? 'border-green-500/50 bg-green-50/30' : 'border-border/50'}`}>
                     <div className="flex items-center justify-between">
@@ -1233,7 +1200,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                           className="rounded-xl"
                         >
                           <CheckCircle2 className={`h-4 w-4 mr-1 ${isCorrect ? '' : 'opacity-50'}`} />
-                          {isCorrect 
+                          {isCorrect
                             ? (formData.answer_type === 'multiple' ? 'Selected' : 'Correct')
                             : (formData.answer_type === 'multiple' ? 'Select' : 'Mark Correct')
                           }
@@ -1242,7 +1209,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                     </div>
                     <div className={`grid grid-cols-1 ${showHindi ? 'md:grid-cols-2' : ''} gap-3`}>
                       <div className="space-y-1">
-                        <MathInput 
+                        <MathInput
                           compact
                           value={formData[opt.field as keyof QuestionFormData] as string}
                           onChange={(val) => setFormData(prev => ({ ...prev, [opt.field]: val }))}
@@ -1252,7 +1219,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                       </div>
                       {showHindi && (
                         <div className="space-y-1">
-                          <MathInput 
+                          <MathInput
                             compact
                             value={formData[opt.hindiField as keyof QuestionFormData] as string}
                             onChange={(val) => setFormData(prev => ({ ...prev, [opt.hindiField]: val }))}
@@ -1289,9 +1256,9 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                       </div>
                       {optionImageUrl && (
                         <div className="mt-2 rounded-lg overflow-hidden border border-border/50">
-                          <img 
-                            src={optionImageUrl} 
-                            alt={`Option ${opt.label} preview`} 
+                          <img
+                            src={optionImageUrl}
+                            alt={`Option ${opt.label} preview`}
                             className="w-full h-24 object-contain bg-muted"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
@@ -1359,9 +1326,9 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
               </div>
               {formData.hint_image_url && (
                 <div className="mt-2 rounded-lg overflow-hidden border border-border/50">
-                  <img 
-                    src={formData.hint_image_url} 
-                    alt="Hint preview" 
+                  <img
+                    src={formData.hint_image_url}
+                    alt="Hint preview"
                     className="w-full h-24 object-contain bg-muted"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
@@ -1422,9 +1389,9 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
               </div>
               {formData.explanation_image_url && (
                 <div className="mt-2 rounded-lg overflow-hidden border border-border/50">
-                  <img 
-                    src={formData.explanation_image_url} 
-                    alt="Explanation preview" 
+                  <img
+                    src={formData.explanation_image_url}
+                    alt="Explanation preview"
                     className="w-full h-24 object-contain bg-muted"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
