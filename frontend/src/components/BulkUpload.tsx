@@ -9,10 +9,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Upload, FileText, FileSpreadsheet, AlertCircle, Download, X, Eye, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as docx from 'docx';
+import * as mammoth from 'mammoth';
 import { saveAs } from 'file-saver';
 
 interface BulkUploadProps {
-  onUpload: (file: File, format: 'csv' | 'docx') => Promise<void>;
+  onUpload: (file: File, format: 'csv' | 'docx', parsedQuestions?: any[]) => Promise<void>;
   onPreview?: (questions: any[]) => void;
 }
 
@@ -23,16 +24,26 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewQuestions, setPreviewQuestions] = useState<any[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [questionsCount, setQuestionsCount] = useState<number | null>(null);
+  const [languageMode, setLanguageMode] = useState<'english' | 'bilingual'>('bilingual');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const downloadDummyTemplateCSV = () => {
-    // Create dummy CSV template
-    const csvContent = `difficulty_level,question_text,option_a,option_b,option_c,option_d,correct_answer,explanation,hint,question_reference,exam_names,time_duration
+    // Create dummy CSV template based on language mode
+    let csvContent = '';
+    if (languageMode === 'english') {
+      csvContent = `difficulty_level,question_text,option_a,option_b,option_c,option_d,correct_answer,explanation,hint,question_reference,exam_names,time_duration
 5,What is the capital of India?,Delhi,Mumbai,Kolkata,Chennai,0,Delhi is the capital of India,Think about the administrative center,REF001,SSC|Railway,60
 6,Which planet is closest to the Sun?,Mercury,Venus,Earth,Mars,0,Mercury is the closest planet to the Sun,It's the first planet in our solar system,REF002,UPSC,45
-7,What is 2 + 2?,3,4,5,6,1,2 + 2 equals 4,Basic arithmetic,REF003,Banking|SSC,30
-8,Who wrote Romeo and Juliet?,Shakespeare,Dickens,Tolstoy,Hemingway,0,William Shakespeare wrote Romeo and Juliet,Think of famous English playwrights,REF004,SSC,90
-5,What is the largest ocean?,Atlantic,Pacific,Indian,Arctic,1,The Pacific Ocean is the largest,Think about ocean sizes,REF005,UPSC|Railway,60`;
+7,What is 2 + 2?,3,4,5,6,1,2 + 2 equals 4,Basic arithmetic,REF003,Banking|SSC,30`;
+    } else {
+      csvContent = `difficulty_level,question_text,question_text_hindi,option_a,option_a_hindi,option_b,option_b_hindi,option_c,option_c_hindi,option_d,option_d_hindi,correct_answer,explanation,explanation_hindi,hint,hint_hindi,question_reference,exam_names,time_duration
+5,What is the capital of India?,भारत की राजधानी क्या है?,Delhi,दिल्ली,Mumbai,मुंबई,Kolkata,कोलकाता,Chennai,चेन्नई,0,Delhi is the capital of India,दिल्ली भारत की राजधानी है,Think about the administrative center,प्रशासनिक केंद्र के बारे में सोचें,REF001,SSC|Railway,60
+6,Which planet is closest to the Sun?,सूर्य के सबसे निकट कौन सा ग्रह है?,Mercury,बुध,Venus,शुक्र,Earth,पृथ्वी,Mars,मंगल,0,Mercury is the closest planet to the Sun,बुध सूर्य के सबसे निकट का ग्रह है,It's the first planet in our solar system,यह हमारे सौर मंडल का पहला ग्रह है,REF002,UPSC,45
+7,What is 2 + 2?,2 + 2 क्या है?,3,3,4,4,5,5,6,6,1,2 + 2 equals 4,2 + 2 चार के बराबर होता है,Basic arithmetic,बुनियादी अंकगणित,REF003,Banking|SSC,30
+8,Who wrote Romeo and Juliet?,रोमियो और जूलियट किसने लिखा?,Shakespeare,शेक्सपियर,Dickens,डिकेंस,Tolstoy,टालस्टाय,Hemingway,हेमिंग्वे,0,William Shakespeare wrote Romeo and Juliet,विलियम शेक्सपियर ने रोमियो और जूलियट लिखा था,Think of famous English playwrights,प्रसिद्ध अंग्रेजी नाटककारों के बारे में सोचें,REF004,SSC,90
+5,What is the largest ocean?,सबसे बड़ा महासागर कौन सा है?,Atlantic,अटलांटिक,Pacific,प्रशांत,Indian,हिंद,Arctic,आर्कटिक,1,The Pacific Ocean is the largest,प्रशांत महासागर सबसे बड़ा है,Think about ocean sizes,महासागर के आकार के बारे में सोचें,REF005,UPSC|Railway,60`;
+    }
 
     // Create blob and download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -62,14 +73,21 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
 
       const fieldRows = [
         ['difficulty_level', 'Difficulty level from 1-10', 'Yes'],
-        ['question_text', 'The question text', 'Yes'],
-        ['option_a', 'Option A text', 'Yes'],
-        ['option_b', 'Option B text', 'Yes'],
-        ['option_c', 'Option C text', 'Yes'],
-        ['option_d', 'Option D text', 'Yes'],
+        ['question_text', 'The question text (English)', 'Yes'],
+        ['question_text_hindi', 'The question text (Hindi)', 'No'],
+        ['option_a', 'Option A text (English)', 'Yes'],
+        ['option_a_hindi', 'Option A text (Hindi)', 'No'],
+        ['option_b', 'Option B text (English)', 'Yes'],
+        ['option_b_hindi', 'Option B text (Hindi)', 'No'],
+        ['option_c', 'Option C text (English)', 'Yes'],
+        ['option_c_hindi', 'Option C text (Hindi)', 'No'],
+        ['option_d', 'Option D text (English)', 'Yes'],
+        ['option_d_hindi', 'Option D text (Hindi)', 'No'],
         ['correct_answer', 'Correct answer index (0-3 for A-D, 4 for X)', 'Yes'],
-        ['explanation', 'Explanation for the answer', 'No'],
-        ['hint', 'Hint for the question', 'No'],
+        ['explanation', 'Explanation (English)', 'No'],
+        ['explanation_hindi', 'Explanation (Hindi)', 'No'],
+        ['hint', 'Hint (English)', 'No'],
+        ['hint_hindi', 'Hint (Hindi)', 'No'],
         ['question_reference', 'Reference code (e.g., PYQ2023)', 'No'],
         ['exam_names', 'Exam names separated by |', 'No'],
         ['time_duration', 'Time in seconds (e.g., 60)', 'No'],
@@ -170,12 +188,198 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
     if (ext === 'csv') {
       setFormat('csv');
       setFile(selectedFile);
+      
+      // Automatically parse for summary
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const text = event.target?.result as string;
+          const questions = parseCSV(text);
+          setQuestionsCount(questions.length);
+          setPreviewQuestions(questions);
+        } catch (error) {
+          setQuestionsCount(0);
+        }
+      };
+      reader.readAsText(selectedFile);
     } else if (ext === 'docx' || ext === 'doc') {
       setFormat('docx');
       setFile(selectedFile);
+      
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const questions = await parseDocx(arrayBuffer);
+          setQuestionsCount(questions.length);
+          setPreviewQuestions(questions);
+        } catch (error) {
+          console.error('Failed to parse DOCX:', error);
+          setQuestionsCount(0);
+        }
+      };
+      reader.readAsArrayBuffer(selectedFile);
     } else {
       toast.error('Please select a CSV or DOCX file');
     }
+  };
+
+  const parseDocx = async (arrayBuffer: ArrayBuffer): Promise<any[]> => {
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+    const html = result.value;
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const tables = doc.querySelectorAll('table');
+    
+    let questionsTable: HTMLTableElement | null = null;
+    
+    for (let i = 0; i < tables.length; i++) {
+      const firstRow = tables[i].querySelector('tr');
+      if (firstRow) {
+        const text = firstRow.textContent?.toLowerCase() || '';
+        if ((text.includes('question') && (text.includes('option') || text.includes('difficulty'))) || text.includes('difficulty')) {
+          questionsTable = tables[i];
+          break;
+        }
+      }
+    }
+    
+    if (!questionsTable && tables.length > 0) {
+      questionsTable = tables[tables.length - 1];
+    }
+    
+    const questions: any[] = [];
+    
+    if (questionsTable) {
+      const rows = questionsTable.querySelectorAll('tr');
+      if (rows.length >= 2) {
+        const headers = Array.from(rows[0].querySelectorAll('td, th')).map(th => {
+          let text = th.textContent?.trim().toLowerCase() || '';
+          if (text.includes('difficulty')) return 'difficulty_level';
+          if (text.includes('question text hindi')) return 'question_text_hindi';
+          if (text === 'question') return 'question_text';
+          if (text.includes('option a hindi')) return 'option_a_hindi';
+          if (text.includes('option a')) return 'option_a';
+          if (text.includes('option b hindi')) return 'option_b_hindi';
+          if (text.includes('option b')) return 'option_b';
+          if (text.includes('option c hindi')) return 'option_c_hindi';
+          if (text.includes('option c')) return 'option_c';
+          if (text.includes('option d hindi')) return 'option_d_hindi';
+          if (text.includes('option d')) return 'option_d';
+          if (text.includes('answer')) return 'correct_answer';
+          if (text.includes('explanation hindi')) return 'explanation_hindi';
+          if (text.includes('explanation')) return 'explanation';
+          if (text.includes('hint hindi')) return 'hint_hindi';
+          if (text.includes('hint')) return 'hint';
+          return text.replace(/\s+/g, '_');
+        });
+        
+        for (let i = 1; i < rows.length; i++) {
+          const cells = Array.from(rows[i].querySelectorAll('td'));
+          if (cells.length < Math.min(headers.length, 6)) continue; 
+          
+          const question: any = {};
+          headers.forEach((header, index) => {
+            const value = cells[index]?.textContent?.trim() || '';
+            
+            if (header === 'difficulty_level') {
+              question.difficulty_level = parseInt(value) || 5;
+            } else if (header === 'correct_answer') {
+              const strVal = value.toString().toUpperCase().trim();
+              if (strVal.startsWith('A') || strVal === '0') question.correct_answer = 0;
+              else if (strVal.startsWith('B') || strVal === '1') question.correct_answer = 1;
+              else if (strVal.startsWith('C') || strVal === '2') question.correct_answer = 2;
+              else if (strVal.startsWith('D') || strVal === '3') question.correct_answer = 3;
+              else if (strVal.startsWith('X') || strVal === '4') question.correct_answer = 4;
+              else {
+                const firstDigit = parseInt(strVal.charAt(0));
+                if (!isNaN(firstDigit) && firstDigit >= 0 && firstDigit <= 4) {
+                   question.correct_answer = firstDigit;
+                } else {
+                   question.correct_answer = 0;
+                }
+              }
+            } else if (header === 'time_duration') {
+              question.time_duration = value ? parseInt(value) : null;
+            } else if (header === 'exam_names') {
+              question.exam_names = value ? value.split('|').map(n => n.trim()).filter(Boolean) : [];
+            } else if (header === 'category_ids' || header === 'subject_ids' || header === 'topic_ids') {
+              question[header] = value ? value.split('|').map(id => id.trim()).filter(Boolean) : [];
+            } else {
+              question[header] = value;
+            }
+          });
+          
+          if (!question.question_text || !question.option_a || !question.option_b || 
+              !question.option_c || !question.option_d || question.correct_answer === undefined) {
+            continue;
+          }
+          
+          if (question.correct_answer < 0 || question.correct_answer > 4) {
+            continue;
+          }
+          
+          questions.push(question);
+        }
+      }
+    }
+    
+    // Add simple text extraction fallback if no table was found
+    if (questions.length === 0) {
+        const textResult = await mammoth.extractRawText({ arrayBuffer });
+        const text = textResult.value;
+        const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+        
+        let currentQuestion: any = null;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lowerLine = line.toLowerCase();
+            
+            const qMatch = line.match(/^(?:q(?:uestion)?\s*\d*[\.\:\-]?\s*|\d+[\.\:\)\-]\s*)(.+)/i);
+            
+            if (qMatch) {
+                if (currentQuestion && currentQuestion.question_text && currentQuestion.option_a && currentQuestion.option_b) {
+                    questions.push({...currentQuestion});
+                }
+                currentQuestion = {
+                    difficulty_level: 5,
+                    question_text: qMatch[1].trim() || line,
+                    correct_answer: 0
+                };
+                continue;
+            }
+            
+            if (!currentQuestion) continue;
+            
+            if (lowerLine.match(/^(?:a)[\.\)\-\:]\s*(.+)/)) {
+                currentQuestion.option_a = line.replace(/^(?:[aA])[\.\)\-\:]\s*/, '').trim();
+            } else if (lowerLine.match(/^(?:b)[\.\)\-\:]\s*(.+)/)) {
+                currentQuestion.option_b = line.replace(/^(?:[bB])[\.\)\-\:]\s*/, '').trim();
+            } else if (lowerLine.match(/^(?:c)[\.\)\-\:]\s*(.+)/)) {
+                currentQuestion.option_c = line.replace(/^(?:[cC])[\.\)\-\:]\s*/, '').trim();
+            } else if (lowerLine.match(/^(?:d)[\.\)\-\:]\s*(.+)/)) {
+                currentQuestion.option_d = line.replace(/^(?:[dD])[\.\)\-\:]\s*/, '').trim();
+            } else if (lowerLine.match(/^(?:ans(?:wer)?|correct)[\.\:\-\s]+(.+)/)) {
+                const ansStr = line.replace(/^(?:ans(?:wer)?|correct)[\.\:\-\s]+/i, '').trim().toUpperCase();
+                if (ansStr.startsWith('A') || ansStr === '1') currentQuestion.correct_answer = 0;
+                else if (ansStr.startsWith('B') || ansStr === '2') currentQuestion.correct_answer = 1;
+                else if (ansStr.startsWith('C') || ansStr === '3') currentQuestion.correct_answer = 2;
+                else if (ansStr.startsWith('D') || ansStr === '4') currentQuestion.correct_answer = 3;
+            } else {
+                if (!currentQuestion.option_a) {
+                    currentQuestion.question_text += '\n' + line;
+                }
+            }
+        }
+        
+        if (currentQuestion && currentQuestion.question_text && currentQuestion.option_a && currentQuestion.option_b) {
+            questions.push({...currentQuestion});
+        }
+    }
+
+    return questions;
   };
 
   const parseCSVLine = (line: string): string[] => {
@@ -258,15 +462,16 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
       return;
     }
 
-    if (format !== 'csv') {
-      toast.info('Preview is only available for CSV files');
-      return;
-    }
-
     setPreviewLoading(true);
     try {
-      const text = await file.text();
-      const questions = parseCSV(text);
+      let questions: any[] = [];
+      if (format === 'csv') {
+        const text = await file.text();
+        questions = parseCSV(text);
+      } else {
+        const buffer = await file.arrayBuffer();
+        questions = await parseDocx(buffer);
+      }
       
       if (questions.length === 0) {
         toast.error('No valid questions found in the file');
@@ -294,10 +499,11 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
 
     setUploading(true);
     try {
-      await onUpload(file, format);
+      await onUpload(file, format, previewQuestions.length > 0 ? previewQuestions : undefined);
       // Reset file input
       setFile(null);
       setPreviewQuestions([]);
+      setQuestionsCount(null);
       // Reset file input element
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -317,8 +523,30 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
   return (
     <Card className="rounded-[1.5rem] border border-border/70 shadow-lg">
       <CardHeader className="border-b border-border/60 px-4 py-3">
-        <CardTitle className="text-sm font-semibold">Bulk Upload Questions</CardTitle>
-        <p className="text-xs text-muted-foreground">Upload questions via CSV or DOCX format</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-sm font-semibold">Bulk Upload Questions</CardTitle>
+            <p className="text-xs text-muted-foreground">Upload questions via CSV or DOCX format</p>
+          </div>
+          <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-xl border border-border/50">
+            <Button
+              size="sm"
+              variant={languageMode === 'english' ? 'default' : 'ghost'}
+              onClick={() => setLanguageMode('english')}
+              className={`text-[10px] h-7 px-2 rounded-lg ${languageMode === 'english' ? 'bg-primary shadow-sm' : ''}`}
+            >
+              English Only
+            </Button>
+            <Button
+              size="sm"
+              variant={languageMode === 'bilingual' ? 'default' : 'ghost'}
+              onClick={() => setLanguageMode('bilingual')}
+              className={`text-[10px] h-7 px-2 rounded-lg ${languageMode === 'bilingual' ? 'bg-primary shadow-sm' : ''}`}
+            >
+              Bilingual (हिन्दी)
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="p-4 space-y-4">
         {/* Download Template Section */}
@@ -358,10 +586,10 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
           </div>
           <ul className="list-disc pl-5 text-xs text-muted-foreground space-y-1">
             <li>Difficulty Level (1-10) - Mandatory</li>
-            <li>Question Text - Mandatory</li>
-            <li>Options (a, b, c, d) - Mandatory</li>
+            <li>Question Text & Hindi Text (Optional)</li>
+            <li>Options (a, b, c, d) & Hindi Options (Optional)</li>
             <li>Correct Answer (0-3 for a-d, 4 for x) - Mandatory</li>
-            <li>Other fields (explanation, hint, etc.) are optional</li>
+            <li>Other fields (explanation, explanation_hindi, hint, hint_hindi, etc.) are optional</li>
           </ul>
         </div>
 
@@ -417,45 +645,49 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
           </div>
 
           {file && (
-            <div className="rounded-xl border border-primary/30 bg-primary/10 p-3">
-              <p className="text-xs font-semibold mb-2">File Format: {format.toUpperCase()}</p>
-              <p className="text-xs text-muted-foreground">
+            <div className={`rounded-xl border p-3 ${format === 'csv' ? 'border-primary/30 bg-primary/10' : 'border-amber-300 bg-amber-50/50'}`}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold uppercase tracking-wider">File Format: {format.toUpperCase()}</p>
+                {format === 'docx' && (
+                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 text-[10px]">
+                    No Preview
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 {format === 'csv'
-                  ? 'CSV should have columns: difficulty_level, question_text, option_a, option_b, option_c, option_d, correct_answer, ...'
-                  : 'DOCX should follow the template format with questions and options clearly marked.'}
+                  ? `CSV should have columns: difficulty_level, question_text, ${languageMode === 'bilingual' ? 'question_text_hindi, ' : ''}option_a, option_b, ...`
+                  : 'DOCX parsing supports tabular format and basic list format. Ensure your structure matches the template.'}
               </p>
             </div>
           )}
 
-          {file && format === 'csv' && (
-            <div className="flex gap-2">
+          {file && (
+            <div className="space-y-3">
+              {questionsCount !== null && (
+                <div className={`flex items-center gap-2 p-3 rounded-xl border ${questionsCount > 0 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                  {questionsCount > 0 ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="text-xs font-bold">Found {questionsCount} valid questions in file.</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="text-xs font-bold">No valid questions found. Please check file format.</span>
+                    </>
+                  )}
+                </div>
+              )}
               <Button
-                onClick={handlePreview}
-                disabled={previewLoading}
-                variant="outline"
-                className="rounded-2xl flex-1"
+                onClick={() => setPreviewOpen(true)}
+                disabled={previewLoading || !questionsCount}
+                className="rounded-2xl w-full h-12 text-sm font-bold shadow-lg shadow-primary/20"
               >
                 <Eye className="h-4 w-4 mr-2" />
-                {previewLoading ? 'Loading...' : 'Preview Questions'}
-              </Button>
-              <Button
-                onClick={handleUpload}
-                disabled={!file || uploading}
-                className="rounded-2xl flex-1"
-              >
-                {uploading ? 'Uploading...' : 'Upload Questions'}
+                Preview & Upload Questions
               </Button>
             </div>
-          )}
-
-          {file && format !== 'csv' && (
-            <Button
-              onClick={handleUpload}
-              disabled={!file || uploading}
-              className="rounded-2xl w-full"
-            >
-              {uploading ? 'Uploading...' : 'Upload Questions'}
-            </Button>
           )}
         </div>
 
@@ -507,7 +739,10 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
                             </span>
                           )}
                         </div>
-                        <p className="text-sm font-bold mb-2 leading-tight">{question.question_text}</p>
+                        <p className="text-sm font-bold mb-1 leading-tight">{question.question_text}</p>
+                        {question.question_text_hindi && languageMode === 'bilingual' && (
+                          <p className="text-xs text-muted-foreground mb-2 leading-tight italic">{question.question_text_hindi}</p>
+                        )}
                         <div className="grid grid-cols-2 gap-1.5">
                           {['option_a', 'option_b', 'option_c', 'option_d'].map((opt, optIdx) => {
                             const optionValue = question[opt];
@@ -515,34 +750,43 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
                             return optionValue ? (
                               <div
                                 key={opt}
-                                className={`flex items-start gap-1.5 p-1.5 rounded border text-xs ${
+                                className={`flex flex-col gap-0.5 p-1.5 rounded border text-xs ${
                                   isCorrect
                                     ? 'border-green-600 bg-green-50 dark:bg-green-950/20'
                                     : 'border-border bg-muted/30'
                                 }`}
                               >
-                                <span className="font-bold text-xs w-4 flex-shrink-0">{getOptionLabel(optIdx)}.</span>
-                                <span className={`flex-1 ${isCorrect ? 'font-bold text-green-700 dark:text-green-400' : 'font-semibold'}`}>
-                                  {optionValue}
-                                </span>
-                                {isCorrect && (
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex items-start gap-1.5">
+                                  <span className="font-bold text-xs w-4 flex-shrink-0">{getOptionLabel(optIdx)}.</span>
+                                  <span className={`flex-1 ${isCorrect ? 'font-bold text-green-700 dark:text-green-400' : 'font-semibold'}`}>
+                                    {optionValue}
+                                  </span>
+                                  {isCorrect && (
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 flex-shrink-0 mt-0.5" />
+                                  )}
+                                </div>
+                                {question[`${opt}_hindi`] && languageMode === 'bilingual' && (
+                                  <div className="pl-5 text-[10px] text-muted-foreground italic">
+                                    {question[`${opt}_hindi`]}
+                                  </div>
                                 )}
                               </div>
                             ) : null;
                           })}
                         </div>
                         <div className="flex flex-wrap gap-2 mt-1.5">
-                          {question.explanation && (
+                          {(question.explanation || question.explanation_hindi) && (
                             <div className="flex-1 min-w-[200px] p-1.5 bg-muted/50 rounded text-xs">
                               <p className="font-bold mb-0.5 text-xs">Explanation:</p>
-                              <p className="font-semibold text-xs leading-tight">{question.explanation}</p>
+                              {question.explanation && <p className="font-semibold text-xs leading-tight">{question.explanation}</p>}
+                              {question.explanation_hindi && languageMode === 'bilingual' && <p className="text-[10px] text-muted-foreground leading-tight italic mt-1">{question.explanation_hindi}</p>}
                             </div>
                           )}
-                          {question.hint && (
+                          {(question.hint || question.hint_hindi) && (
                             <div className="flex-1 min-w-[200px] p-1.5 bg-amber-50 dark:bg-amber-950/20 rounded text-xs">
                               <p className="font-bold mb-0.5 text-xs">Hint:</p>
-                              <p className="font-semibold text-xs leading-tight">{question.hint}</p>
+                              {question.hint && <p className="font-semibold text-xs leading-tight">{question.hint}</p>}
+                              {question.hint_hindi && languageMode === 'bilingual' && <p className="text-[10px] text-muted-foreground leading-tight italic mt-1">{question.hint_hindi}</p>}
                             </div>
                           )}
                         </div>

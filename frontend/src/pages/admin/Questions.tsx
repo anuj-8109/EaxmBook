@@ -396,48 +396,54 @@ const Questions = () => {
     return questions;
   };
 
-  const handleBulkUpload = async (file: File, format: 'csv' | 'docx') => {
+  const handleBulkUpload = async (file: File, format: 'csv' | 'docx', parsedQuestions?: any[]) => {
     setLoading(true);
     try {
-      if (format === 'csv') {
-        const text = await file.text();
-        const questions = parseCSV(text);
+      let questions = parsedQuestions || [];
 
-        if (questions.length === 0) {
-          showError('No valid questions found in the file');
+      if (!questions || questions.length === 0) {
+        if (format === 'csv') {
+          const text = await file.text();
+          questions = parseCSV(text);
+        } else {
+          showError('No valid questions parsed from DOCX. Please ensure your file matches the template structure.');
           setLoading(false);
           return;
         }
+      }
 
-        showInfo('Processing', `Processing ${questions.length} question(s)...`);
+      if (questions.length === 0) {
+        showError('No valid questions found in the file');
+        setLoading(false);
+        return;
+      }
 
-        // Use bulk API endpoint
-        try {
-          const response = await questionsAPI.bulkCreate(questions);
+      showInfo('Processing', `Processing ${questions.length} question(s)...`);
 
-          if (response.created > 0) {
-            showSuccess(`Successfully uploaded ${response.created} out of ${response.total} question(s)!`);
+      // Use bulk API endpoint
+      try {
+        const response = await questionsAPI.bulkCreate(questions);
 
-            // Show errors if any
-            if (response.errors && response.errors.length > 0) {
-              console.warn('Upload errors:', response.errors);
-              showWarning('Upload Warning', `${response.errors.length} question(s) had errors. Check console for details.`);
-            }
+        if (response.created > 0) {
+          showSuccess(`Successfully uploaded ${response.created} out of ${response.total} question(s)!`);
 
-            // Refresh questions list
-            await fetchQuestions();
-
-            // Switch to list tab to see uploaded questions
-            setActiveTab('list');
-          } else {
-            showError('No questions were uploaded. Please check the file format.');
+          // Show errors if any
+          if (response.errors && response.errors.length > 0) {
+            console.warn('Upload errors:', response.errors);
+            showWarning('Upload Warning', `${response.errors.length} question(s) had errors. Check console for details.`);
           }
-        } catch (error: any) {
-          console.error('Bulk upload error:', error);
-          showError('Failed to upload questions', error.message || 'Unknown error');
+
+          // Refresh questions list
+          await fetchQuestions();
+
+          // Switch to list tab to see uploaded questions
+          setActiveTab('list');
+        } else {
+          showError('No questions were uploaded. Please check the file format.');
         }
-      } else {
-        showInfo('Coming Soon', 'DOCX format support coming soon. Please use CSV format for now.');
+      } catch (error: any) {
+        console.error('Bulk upload error:', error);
+        showError('Failed to upload questions', error.message || 'Unknown error');
       }
     } catch (error: any) {
       showError('Failed to process file', error.message);
@@ -721,16 +727,26 @@ const Questions = () => {
                                       ))}
                                     </div>
                                   </div>
-                                  {question.hint && (
+                                  {(question.hint || question.hint_hindi) && (
                                     <div>
                                       <Label className="text-[10px] sm:text-xs text-muted-foreground">Hint</Label>
-                                      <p className="text-xs sm:text-sm break-words">{question.hint}</p>
+                                      {question.hint && <p className="text-xs sm:text-sm break-words">{question.hint}</p>}
+                                      {question.hint_hindi && (
+                                        <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words italic">
+                                          (Hindi) {question.hint_hindi}
+                                        </p>
+                                      )}
                                     </div>
                                   )}
-                                  {question.explanation && (
+                                  {(question.explanation || question.explanation_hindi) && (
                                     <div>
                                       <Label className="text-[10px] sm:text-xs text-muted-foreground">Explanation</Label>
-                                      <p className="text-xs sm:text-sm break-words">{question.explanation}</p>
+                                      {question.explanation && <p className="text-xs sm:text-sm break-words">{question.explanation}</p>}
+                                      {question.explanation_hindi && (
+                                        <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words italic">
+                                          (Hindi) {question.explanation_hindi}
+                                        </p>
+                                      )}
                                     </div>
                                   )}
                                 </div>
