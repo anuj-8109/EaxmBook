@@ -26,6 +26,7 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [questionsCount, setQuestionsCount] = useState<number | null>(null);
   const [languageMode, setLanguageMode] = useState<'english' | 'bilingual'>('bilingual');
+  const [parseDebug, setParseDebug] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const downloadDummyTemplateCSV = () => {
@@ -205,6 +206,7 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
     } else if (ext === 'docx' || ext === 'doc') {
       setFormat('docx');
       setFile(selectedFile);
+      setParseDebug('');
       
       const reader = new FileReader();
       reader.onload = async (event) => {
@@ -213,9 +215,14 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
           const questions = await parseDocx(arrayBuffer);
           setQuestionsCount(questions.length);
           setPreviewQuestions(questions);
-        } catch (error) {
+          
+          if (questions.length === 0) {
+            setParseDebug('Could not parse any questions. Please ensure your DOCX follows one of these formats:\n\n1. Table format with headers: Question | Option A | Option B | Option C | Option D | Answer\n\n2. Text format:\n1. What is the capital?\nA) Delhi\nB) Mumbai\nC) Kolkata\nD) Chennai\nAnswer: A\n\n3. Or use Quick Add tab with [Q] marker format');
+          }
+        } catch (error: any) {
           console.error('Failed to parse DOCX:', error);
           setQuestionsCount(0);
+          setParseDebug('Error parsing DOCX: ' + (error.message || 'Unknown error') + '\n\nPlease check your file format.');
         }
       };
       reader.readAsArrayBuffer(selectedFile);
@@ -225,160 +232,343 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
   };
 
   const parseDocx = async (arrayBuffer: ArrayBuffer): Promise<any[]> => {
-    const result = await mammoth.convertToHtml({ arrayBuffer });
-    const html = result.value;
-    
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const tables = doc.querySelectorAll('table');
-    
-    let questionsTable: HTMLTableElement | null = null;
-    
-    for (let i = 0; i < tables.length; i++) {
-      const firstRow = tables[i].querySelector('tr');
-      if (firstRow) {
-        const text = firstRow.textContent?.toLowerCase() || '';
-        if ((text.includes('question') && (text.includes('option') || text.includes('difficulty'))) || text.includes('difficulty')) {
-          questionsTable = tables[i];
-          break;
-        }
-      }
-    }
-    
-    if (!questionsTable && tables.length > 0) {
-      questionsTable = tables[tables.length - 1];
-    }
-    
     const questions: any[] = [];
     
-    if (questionsTable) {
-      const rows = questionsTable.querySelectorAll('tr');
-      if (rows.length >= 2) {
-        const headers = Array.from(rows[0].querySelectorAll('td, th')).map(th => {
-          let text = th.textContent?.trim().toLowerCase() || '';
-          if (text.includes('difficulty')) return 'difficulty_level';
-          if (text.includes('question text hindi')) return 'question_text_hindi';
-          if (text === 'question') return 'question_text';
-          if (text.includes('option a hindi')) return 'option_a_hindi';
-          if (text.includes('option a')) return 'option_a';
-          if (text.includes('option b hindi')) return 'option_b_hindi';
-          if (text.includes('option b')) return 'option_b';
-          if (text.includes('option c hindi')) return 'option_c_hindi';
-          if (text.includes('option c')) return 'option_c';
-          if (text.includes('option d hindi')) return 'option_d_hindi';
-          if (text.includes('option d')) return 'option_d';
-          if (text.includes('answer')) return 'correct_answer';
-          if (text.includes('explanation hindi')) return 'explanation_hindi';
-          if (text.includes('explanation')) return 'explanation';
-          if (text.includes('hint hindi')) return 'hint_hindi';
-          if (text.includes('hint')) return 'hint';
-          return text.replace(/\s+/g, '_');
-        });
+    try {
+      // First try HTML conversion for table parsing
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      const html = result.value;
+      
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const tables = doc.querySelectorAll('table');
+      
+      console.log(`Found ${tables.length} tables in DOCX`);
+      
+      // Try to find the questions table
+      let questionsTable: HTMLTableElement | null = null;
+      
+      for (let i = 0; i < tables.length; i++) {
+        const table = tables[i];
+        const firstRow = table.querySelector('tr');
+        if (firstRow) {
+          const text = firstRow.textContent?.toLowerCase() || '';
+          // Look for tables with question-related headers
+          if (text.includes('question') || text.includes('difficulty') || 
+              text.includes('option') || text.includes('answer') ||
+              text.includes('q.') || text.includes('qno')) {
+            questionsTable = table;
+            console.log(`Found questions table at index ${i}`);
+            break;
+          }
+        }
+      }
+      
+      // If no specific table found, use the largest table (likely the data table)
+      if (!questionsTable && tables.length > 0) {
+        let maxRows = 0;
+        for (const table of Array.from(tables)) {
+          const rowCount = table.querySelectorAll('tr').length;
+          if (rowCount > maxRows) {
+            maxRows = rowCount;
+            questionsTable = table;
+          }
+        }
+        if (questionsTable) {
+          console.log(`Using largest table with ${maxRows} rows`);
+        }
+      }
+      
+      // Parse table if found
+      if (questionsTable) {
+        const rows = Array.from(questionsTable.querySelectorAll('tr'));
+        console.log(`Parsing table with ${rows.length} rows`);
         
-        for (let i = 1; i < rows.length; i++) {
-          const cells = Array.from(rows[i].querySelectorAll('td'));
-          if (cells.length < Math.min(headers.length, 6)) continue; 
-          
-          const question: any = {};
-          headers.forEach((header, index) => {
-            const value = cells[index]?.textContent?.trim() || '';
+        if (rows.length >= 2) {
+          // Extract headers
+          const headerRow = rows[0];
+          const headerCells = Array.from(headerRow.querySelectorAll('td, th'));
+          const headers = headerCells.map(th => {
+            let text = th.textContent?.trim().toLowerCase() || '';
             
-            if (header === 'difficulty_level') {
-              question.difficulty_level = parseInt(value) || 5;
-            } else if (header === 'correct_answer') {
-              const strVal = value.toString().toUpperCase().trim();
-              if (strVal.startsWith('A') || strVal === '0') question.correct_answer = 0;
-              else if (strVal.startsWith('B') || strVal === '1') question.correct_answer = 1;
-              else if (strVal.startsWith('C') || strVal === '2') question.correct_answer = 2;
-              else if (strVal.startsWith('D') || strVal === '3') question.correct_answer = 3;
-              else if (strVal.startsWith('X') || strVal === '4') question.correct_answer = 4;
-              else {
-                const firstDigit = parseInt(strVal.charAt(0));
-                if (!isNaN(firstDigit) && firstDigit >= 0 && firstDigit <= 4) {
-                   question.correct_answer = firstDigit;
-                } else {
-                   question.correct_answer = 0;
-                }
-              }
-            } else if (header === 'time_duration') {
-              question.time_duration = value ? parseInt(value) : null;
-            } else if (header === 'exam_names') {
-              question.exam_names = value ? value.split('|').map(n => n.trim()).filter(Boolean) : [];
-            } else if (header === 'category_ids' || header === 'subject_ids' || header === 'topic_ids') {
-              question[header] = value ? value.split('|').map(id => id.trim()).filter(Boolean) : [];
-            } else {
-              question[header] = value;
-            }
+            // Map common header variations
+            if (text.includes('difficulty') || text.includes('level') || text.includes('diff')) return 'difficulty_level';
+            if (text.includes('question text hindi') || text.includes('question hindi')) return 'question_text_hindi';
+            if (text === 'question' || text === 'question text' || text.includes('question') || text === 'q.' || text.includes('question statement')) return 'question_text';
+            if (text.includes('option a hindi') || (text.includes('option') && text.includes('a') && text.includes('hindi'))) return 'option_a_hindi';
+            if (text.includes('option a') || (text.includes('option') && text.includes('a')) || text === 'a' || text === 'opt a') return 'option_a';
+            if (text.includes('option b hindi') || (text.includes('option') && text.includes('b') && text.includes('hindi'))) return 'option_b_hindi';
+            if (text.includes('option b') || (text.includes('option') && text.includes('b')) || text === 'b' || text === 'opt b') return 'option_b';
+            if (text.includes('option c hindi') || (text.includes('option') && text.includes('c') && text.includes('hindi'))) return 'option_c_hindi';
+            if (text.includes('option c') || (text.includes('option') && text.includes('c')) || text === 'c' || text === 'opt c') return 'option_c';
+            if (text.includes('option d hindi') || (text.includes('option') && text.includes('d') && text.includes('hindi'))) return 'option_d_hindi';
+            if (text.includes('option d') || (text.includes('option') && text.includes('d')) || text === 'd' || text === 'opt d') return 'option_d';
+            if (text.includes('answer') || text.includes('correct') || text.includes('ans')) return 'correct_answer';
+            if (text.includes('explanation hindi') || (text.includes('explanation') && text.includes('hindi'))) return 'explanation_hindi';
+            if (text.includes('explanation') || text.includes('solution') || text.includes('sol')) return 'explanation';
+            if (text.includes('hint hindi') || (text.includes('hint') && text.includes('hindi'))) return 'hint_hindi';
+            if (text.includes('hint')) return 'hint';
+            if (text.includes('reference') || text.includes('ref')) return 'question_reference';
+            if (text.includes('exam')) return 'exam_names';
+            if (text.includes('time') || text.includes('duration')) return 'time_duration';
+            
+            return text.replace(/\s+/g, '_');
           });
           
-          if (!question.question_text || !question.option_a || !question.option_b || 
-              !question.option_c || !question.option_d || question.correct_answer === undefined) {
-            continue;
+          console.log('Detected headers:', headers);
+          
+          // Parse data rows
+          for (let i = 1; i < rows.length; i++) {
+            const cells = Array.from(rows[i].querySelectorAll('td, th'));
+            if (cells.length < 3) continue; // Need at least question and 2 options
+            
+            const question: any = { difficulty_level: 5, correct_answer: 0 };
+            
+            headers.forEach((header, index) => {
+              const value = cells[index]?.textContent?.trim() || '';
+              if (!value) return;
+              
+              if (header === 'difficulty_level') {
+                const parsed = parseInt(value);
+                question.difficulty_level = !isNaN(parsed) && parsed >= 1 && parsed <= 10 ? parsed : 5;
+              } else if (header === 'correct_answer') {
+                const strVal = value.toUpperCase().trim();
+                if (strVal.startsWith('A') || strVal === '0' || strVal.includes('OPTION A')) question.correct_answer = 0;
+                else if (strVal.startsWith('B') || strVal === '1' || strVal.includes('OPTION B')) question.correct_answer = 1;
+                else if (strVal.startsWith('C') || strVal === '2' || strVal.includes('OPTION C')) question.correct_answer = 2;
+                else if (strVal.startsWith('D') || strVal === '3' || strVal.includes('OPTION D')) question.correct_answer = 3;
+                else if (strVal.startsWith('X') || strVal === '4') question.correct_answer = 4;
+                else {
+                  const match = strVal.match(/\d/);
+                  if (match) {
+                    const num = parseInt(match[0]);
+                    if (num >= 0 && num <= 4) question.correct_answer = num;
+                  }
+                }
+              } else if (header === 'time_duration') {
+                const parsed = parseInt(value);
+                question.time_duration = !isNaN(parsed) ? parsed : null;
+              } else if (header === 'exam_names') {
+                question.exam_names = value.split(/[,|]/).map(n => n.trim()).filter(Boolean);
+              } else if (header === 'category_ids' || header === 'subject_ids' || header === 'topic_ids') {
+                question[header] = value.split(/[,|]/).map(id => id.trim()).filter(Boolean);
+              } else {
+                question[header] = value;
+              }
+            });
+            
+            // Validate question has minimum required fields
+            if (question.question_text && question.option_a && question.option_b) {
+              // Ensure all options exist
+              if (!question.option_c) question.option_c = 'None';
+              if (!question.option_d) question.option_d = 'None';
+              
+              if (question.correct_answer >= 0 && question.correct_answer <= 4) {
+                questions.push(question);
+              }
+            }
           }
           
-          if (question.correct_answer < 0 || question.correct_answer > 4) {
-            continue;
-          }
-          
-          questions.push(question);
+          console.log(`Parsed ${questions.length} questions from table`);
         }
+      }
+    } catch (error) {
+      console.error('Error parsing DOCX HTML:', error);
+    }
+    
+    // Fallback: Parse as raw text if no questions found from table
+    if (questions.length === 0) {
+      console.log('No questions from table, trying text extraction...');
+      try {
+        const textResult = await mammoth.extractRawText({ arrayBuffer });
+        const text = textResult.value;
+        
+        console.log('Raw text preview:', text.substring(0, 500));
+        
+        // Try multiple parsing strategies
+        const parsedFromPattern = parseDocxTextPatterns(text);
+        if (parsedFromPattern.length > 0) {
+          console.log(`Parsed ${parsedFromPattern.length} questions from text patterns`);
+          return parsedFromPattern;
+        }
+        
+        // Last resort: Try to parse any numbered list format
+        const parsedFromList = parseDocxListFormat(text);
+        if (parsedFromList.length > 0) {
+          console.log(`Parsed ${parsedFromList.length} questions from list format`);
+          return parsedFromList;
+        }
+      } catch (error) {
+        console.error('Error extracting raw text:', error);
+      }
+    }
+
+    return questions;
+  };
+
+  // Parse DOCX text with various patterns
+  const parseDocxTextPatterns = (text: string): any[] => {
+    const questions: any[] = [];
+    const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    
+    let currentQuestion: any = null;
+    let inQuestion = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lowerLine = line.toLowerCase();
+      
+      // Pattern 1: Q1. or Q. or 1. or Question 1:
+      const qMatch = line.match(/^(?:q(?:uestion)?\s*(?:no\.?)?\s*\d*[\.\:\-\)]\s*|\d+[\.\:\)\-\]]\s*)(.+)/i);
+      
+      // Pattern 2: Lines starting with Question (case insensitive)
+      const qWordMatch = line.match(/^question[\s\d\.\:\-]+(.+)/i);
+      
+      if (qMatch || qWordMatch) {
+        // Save previous question if valid
+        if (currentQuestion && currentQuestion.question_text && currentQuestion.option_a) {
+          if (!currentQuestion.option_c) currentQuestion.option_c = 'None';
+          if (!currentQuestion.option_d) currentQuestion.option_d = 'None';
+          questions.push({ ...currentQuestion });
+        }
+        
+        const questionText = (qMatch?.[1] || qWordMatch?.[1] || line).trim();
+        currentQuestion = {
+          difficulty_level: 5,
+          question_text: questionText,
+          correct_answer: 0
+        };
+        inQuestion = true;
+        continue;
+      }
+      
+      if (!currentQuestion) continue;
+      
+      // Detect options - various formats: A) B) C) D) or a. b. c. d. or Option A: etc.
+      const optionAMatch = line.match(/^(?:a|option\s*a)[\.\)\-\:]\s*(.+)/i);
+      const optionBMatch = line.match(/^(?:b|option\s*b)[\.\)\-\:]\s*(.+)/i);
+      const optionCMatch = line.match(/^(?:c|option\s*c)[\.\)\-\:]\s*(.+)/i);
+      const optionDMatch = line.match(/^(?:d|option\s*d)[\.\)\-\:]\s*(.+)/i);
+      
+      if (optionAMatch) {
+        currentQuestion.option_a = optionAMatch[1].trim();
+      } else if (optionBMatch) {
+        currentQuestion.option_b = optionBMatch[1].trim();
+      } else if (optionCMatch) {
+        currentQuestion.option_c = optionCMatch[1].trim();
+      } else if (optionDMatch) {
+        currentQuestion.option_d = optionDMatch[1].trim();
+      }
+      // Answer detection: Answer: B or Ans: 1 or Correct: A etc.
+      else if (lowerLine.match(/^(?:ans(?:wer)?|correct|right)[\s\:\-\=]+/)) {
+        const ansStr = line.replace(/^(?:ans(?:wer)?|correct|right)[\s\:\-\=]+/i, '').trim().toUpperCase();
+        if (ansStr.startsWith('A') || ansStr === '1' || ansStr.startsWith('OPTION A')) currentQuestion.correct_answer = 0;
+        else if (ansStr.startsWith('B') || ansStr === '2' || ansStr.startsWith('OPTION B')) currentQuestion.correct_answer = 1;
+        else if (ansStr.startsWith('C') || ansStr === '3' || ansStr.startsWith('OPTION C')) currentQuestion.correct_answer = 2;
+        else if (ansStr.startsWith('D') || ansStr === '4' || ansStr.startsWith('OPTION D')) currentQuestion.correct_answer = 3;
+        
+        // Extract answer from patterns like "B) Delhi" or "Option B - Delhi"
+        const optionExtract = ansStr.match(/^[\s\(\[]*([A-D])\b/);
+        if (optionExtract) {
+          const letter = optionExtract[1];
+          currentQuestion.correct_answer = letter.charCodeAt(0) - 'A'.charCodeAt(0);
+        }
+      }
+      // Difficulty detection: Level: 5 or Difficulty: 3 etc.
+      else if (lowerLine.match(/^(?:level|difficulty|diff|hardness)[\s\:\-\=]+/)) {
+        const numMatch = line.match(/\d+/);
+        if (numMatch) {
+          const level = parseInt(numMatch[0]);
+          if (level >= 1 && level <= 10) {
+            currentQuestion.difficulty_level = level;
+          }
+        }
+      }
+      // Explanation/Solution detection
+      else if (lowerLine.match(/^(?:explanation|solution|sol|explain|reason)[\s\:\-\=]+/)) {
+        currentQuestion.explanation = line.replace(/^(?:explanation|solution|sol|explain|reason)[\s\:\-\=]+/i, '').trim();
+      }
+      // Hint detection
+      else if (lowerLine.match(/^(?:hint|clue|tip)[\s\:\-\=]+/)) {
+        currentQuestion.hint = line.replace(/^(?:hint|clue|tip)[\s\:\-\=]+/i, '').trim();
+      }
+      // Reference detection
+      else if (lowerLine.match(/^(?:reference|ref|source)[\s\:\-\=]+/)) {
+        currentQuestion.question_reference = line.replace(/^(?:reference|ref|source)[\s\:\-\=]+/i, '').trim();
+      }
+      // If no specific pattern matched and we haven't seen options yet, append to question text
+      else if (!currentQuestion.option_a) {
+        currentQuestion.question_text += ' ' + line;
       }
     }
     
-    // Add simple text extraction fallback if no table was found
-    if (questions.length === 0) {
-        const textResult = await mammoth.extractRawText({ arrayBuffer });
-        const text = textResult.value;
-        const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
-        
-        let currentQuestion: any = null;
-        
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const lowerLine = line.toLowerCase();
-            
-            const qMatch = line.match(/^(?:q(?:uestion)?\s*\d*[\.\:\-]?\s*|\d+[\.\:\)\-]\s*)(.+)/i);
-            
-            if (qMatch) {
-                if (currentQuestion && currentQuestion.question_text && currentQuestion.option_a && currentQuestion.option_b) {
-                    questions.push({...currentQuestion});
-                }
-                currentQuestion = {
-                    difficulty_level: 5,
-                    question_text: qMatch[1].trim() || line,
-                    correct_answer: 0
-                };
-                continue;
-            }
-            
-            if (!currentQuestion) continue;
-            
-            if (lowerLine.match(/^(?:a)[\.\)\-\:]\s*(.+)/)) {
-                currentQuestion.option_a = line.replace(/^(?:[aA])[\.\)\-\:]\s*/, '').trim();
-            } else if (lowerLine.match(/^(?:b)[\.\)\-\:]\s*(.+)/)) {
-                currentQuestion.option_b = line.replace(/^(?:[bB])[\.\)\-\:]\s*/, '').trim();
-            } else if (lowerLine.match(/^(?:c)[\.\)\-\:]\s*(.+)/)) {
-                currentQuestion.option_c = line.replace(/^(?:[cC])[\.\)\-\:]\s*/, '').trim();
-            } else if (lowerLine.match(/^(?:d)[\.\)\-\:]\s*(.+)/)) {
-                currentQuestion.option_d = line.replace(/^(?:[dD])[\.\)\-\:]\s*/, '').trim();
-            } else if (lowerLine.match(/^(?:ans(?:wer)?|correct)[\.\:\-\s]+(.+)/)) {
-                const ansStr = line.replace(/^(?:ans(?:wer)?|correct)[\.\:\-\s]+/i, '').trim().toUpperCase();
-                if (ansStr.startsWith('A') || ansStr === '1') currentQuestion.correct_answer = 0;
-                else if (ansStr.startsWith('B') || ansStr === '2') currentQuestion.correct_answer = 1;
-                else if (ansStr.startsWith('C') || ansStr === '3') currentQuestion.correct_answer = 2;
-                else if (ansStr.startsWith('D') || ansStr === '4') currentQuestion.correct_answer = 3;
-            } else {
-                if (!currentQuestion.option_a) {
-                    currentQuestion.question_text += '\n' + line;
-                }
-            }
-        }
-        
-        if (currentQuestion && currentQuestion.question_text && currentQuestion.option_a && currentQuestion.option_b) {
-            questions.push({...currentQuestion});
-        }
+    // Don't forget the last question
+    if (currentQuestion && currentQuestion.question_text && currentQuestion.option_a) {
+      if (!currentQuestion.option_c) currentQuestion.option_c = 'None';
+      if (!currentQuestion.option_d) currentQuestion.option_d = 'None';
+      questions.push({ ...currentQuestion });
     }
+    
+    return questions;
+  };
 
+  // Parse list format: 1. Question? A) Option1 B) Option2 etc.
+  const parseDocxListFormat = (text: string): any[] => {
+    const questions: any[] = [];
+    
+    // Split into potential question blocks
+    // Look for patterns like "1." or "Q1." followed by text, then options
+    const questionBlocks = text.split(/(?=\n?(?:^\s*\d+[\.\)\:\-\]]\s+|^\s*q(?:uestion)?\s*\d*[\.\:\-]\s*))/gmi);
+    
+    for (const block of questionBlocks) {
+      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 3) continue; // Need at least question + 2 options
+      
+      const firstLine = lines[0];
+      
+      // Check if first line looks like a question start
+      if (!firstLine.match(/^(?:q(?:uestion)?\s*(?:no\.?)?\s*\d*[\.\:\-\)]?\s*|\d+[\.\:\)\-\]]\s*)/i)) {
+        continue;
+      }
+      
+      const question: any = {
+        difficulty_level: 5,
+        correct_answer: 0
+      };
+      
+      // Extract question text (remove the number/prefix)
+      question.question_text = firstLine.replace(/^(?:q(?:uestion)?\s*(?:no\.?)?\s*\d*[\.\:\-\)]?\s*|\d+[\.\:\)\-\]]\s*)/i, '').trim();
+      
+      // Look for options in subsequent lines
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const lowerLine = line.toLowerCase();
+        
+        const optionAMatch = line.match(/^(?:a[\.\)\-\:]\s*|option\s*a[\.\)\-\:]\s*)(.+)/i);
+        const optionBMatch = line.match(/^(?:b[\.\)\-\:]\s*|option\s*b[\.\)\-\:]\s*)(.+)/i);
+        const optionCMatch = line.match(/^(?:c[\.\)\-\:]\s*|option\s*c[\.\)\-\:]\s*)(.+)/i);
+        const optionDMatch = line.match(/^(?:d[\.\)\-\:]\s*|option\s*d[\.\)\-\:]\s*)(.+)/i);
+        
+        if (optionAMatch) question.option_a = optionAMatch[1].trim();
+        else if (optionBMatch) question.option_b = optionBMatch[1].trim();
+        else if (optionCMatch) question.option_c = optionCMatch[1].trim();
+        else if (optionDMatch) question.option_d = optionDMatch[1].trim();
+        else if (lowerLine.includes('answer') || lowerLine.includes('correct')) {
+          const ansStr = line.replace(/.*?(?:answer|correct)[\s\:\-\=]*/i, '').trim().toUpperCase();
+          if (ansStr.startsWith('A')) question.correct_answer = 0;
+          else if (ansStr.startsWith('B')) question.correct_answer = 1;
+          else if (ansStr.startsWith('C')) question.correct_answer = 2;
+          else if (ansStr.startsWith('D')) question.correct_answer = 3;
+        }
+      }
+      
+      if (question.question_text && question.option_a && question.option_b) {
+        if (!question.option_c) question.option_c = 'None';
+        if (!question.option_d) question.option_d = 'None';
+        questions.push(question);
+      }
+    }
+    
     return questions;
   };
 
@@ -504,6 +694,7 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
       setFile(null);
       setPreviewQuestions([]);
       setQuestionsCount(null);
+      setParseDebug('');
       // Reset file input element
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -632,6 +823,8 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
                     className="h-6 w-6 p-0"
                     onClick={() => {
                       setFile(null);
+                      setParseDebug('');
+                      setQuestionsCount(null);
                       if (fileInputRef.current) {
                         fileInputRef.current.value = '';
                       }
@@ -677,6 +870,17 @@ export const BulkUpload = ({ onUpload, onPreview }: BulkUploadProps) => {
                       <span className="text-xs font-bold">No valid questions found. Please check file format.</span>
                     </>
                   )}
+                </div>
+              )}
+              
+              {/* Debug info for failed DOCX parsing */}
+              {parseDebug && questionsCount === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-1">Format Help:</p>
+                  <pre className="text-[10px] text-amber-700 whitespace-pre-wrap font-mono leading-relaxed">{parseDebug}</pre>
+                  <p className="text-[10px] text-amber-600 mt-2">
+                    Tip: Try using the <strong>Quick Add</strong> tab instead with the [Q] format marker for easier bulk entry.
+                  </p>
                 </div>
               )}
               <Button

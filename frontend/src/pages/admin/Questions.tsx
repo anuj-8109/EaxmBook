@@ -13,6 +13,7 @@ import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X, Trash, Download, 
 import { Checkbox } from '@/components/ui/checkbox';
 import { showError, showSuccess, showWarning, showInfo, showDeleteConfirm } from '@/lib/sweetalert';
 import { questionsAPI, tagsAPI, categoriesAPI } from '@/lib/api';
+import * as mammoth from 'mammoth';
 import { AdminPageHeading } from '@/components/AdminPageHeading';
 import { QuestionForm } from '@/components/QuestionForm';
 import { DuplicateDetector } from '@/components/DuplicateDetector';
@@ -608,9 +609,9 @@ const Questions = () => {
           const text = await file.text();
           questions = parseCSV(text);
         } else {
-          showError('No valid questions parsed from DOCX. Please ensure your file matches the template structure.');
-          setLoading(false);
-          return;
+          // Parse DOCX file
+          const arrayBuffer = await file.arrayBuffer();
+          questions = await parseDocxFallback(arrayBuffer);
         }
       }
 
