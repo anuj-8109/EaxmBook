@@ -739,6 +739,38 @@ export const uploadAPI = {
   },
 };
 
+// Tags API
+export const tagsAPI = {
+  getAll: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', String(page));
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/tags${query}`);
+  },
+  getById: (id: string) => apiRequest(`/tags/${id}`),
+  create: (data: any) => apiRequest('/tags', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: string, data: any) => apiRequest(`/tags/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: string) => apiRequest(`/tags/${id}`, {
+    method: 'DELETE',
+  }),
+  batchDelete: (ids: string[]) => apiRequest('/tags/batch', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
+  }),
+  // Add tags to questions
+  addToQuestions: (questionIds: string[], tagIds: string[]) => apiRequest('/tags/add-to-questions', {
+    method: 'POST',
+    body: JSON.stringify({ question_ids: questionIds, tag_ids: tagIds }),
+  }),
+};
+
 // AI API
 export const aiAPI = {
   generate: (payload: { type: string, context?: any, count?: number }) => apiRequest('/ai/generate', {

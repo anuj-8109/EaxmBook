@@ -9,10 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X, Trash } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X, Trash, Download, Rocket, Tags } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { showError, showSuccess, showWarning, showInfo, showDeleteConfirm } from '@/lib/sweetalert';
-import { questionsAPI } from '@/lib/api';
+import { questionsAPI, tagsAPI, categoriesAPI } from '@/lib/api';
 import { AdminPageHeading } from '@/components/AdminPageHeading';
 import { QuestionForm } from '@/components/QuestionForm';
 import { DuplicateDetector } from '@/components/DuplicateDetector';
@@ -84,6 +84,24 @@ const Questions = () => {
   
   // Multi-select states
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
+
+  // Quick Add states
+  const [quickAddEnglish, setQuickAddEnglish] = useState('');
+  const [quickAddHindi, setQuickAddHindi] = useState('');
+  const [quickAddCategory, setQuickAddCategory] = useState('');
+  const [quickAddDifficulty, setQuickAddDifficulty] = useState('5');
+  const [quickAddTime, setQuickAddTime] = useState('60');
+  const [quickAddSource, setQuickAddSource] = useState('');
+  const [quickAddTags, setQuickAddTags] = useState<string[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [tags, setTags] = useState<any[]>([]);
+
+  // Add Tags to Selected modal
+  const [showAddTagsModal, setShowAddTagsModal] = useState(false);
+  const [selectedTagsToAdd, setSelectedTagsToAdd] = useState<string[]>([]);
+
+  // View Question modal enhanced
+  const [viewingQuestionDetails, setViewingQuestionDetails] = useState<Question | null>(null);
 
   // Memoize initialData to prevent unnecessary re-renders of QuestionForm
   const questionFormInitialData = useMemo(() => {
@@ -176,7 +194,21 @@ const Questions = () => {
 
   useEffect(() => {
     fetchQuestions();
+    fetchCategoriesAndTags();
   }, [currentPage]);
+
+  const fetchCategoriesAndTags = async () => {
+    try {
+      const [categoriesData, tagsData] = await Promise.all([
+        categoriesAPI.getAll(true),
+        tagsAPI.getAll()
+      ]);
+      setCategories(categoriesData || []);
+      setTags(tagsData?.data || tagsData || []);
+    } catch (error) {
+      console.error('Failed to load categories or tags:', error);
+    }
+  };
 
   useEffect(() => {
     filterQuestions();
@@ -310,6 +342,176 @@ const Questions = () => {
       fetchQuestions();
     } catch (error: any) {
       showError('Failed to delete questions', error.message);
+    }
+  };
+
+  // Download CSV Template
+  const handleDownloadTemplate = () => {
+    const headers = [
+      'question_text', 'question_text_hindi', 'option_a', 'option_a_hindi',
+      'option_b', 'option_b_hindi', 'option_c', 'option_c_hindi',
+      'option_d', 'option_d_hindi', 'option_x', 'option_x_hindi',
+      'correct_answer', 'answer_type', 'difficulty_level', 'time_duration',
+      'question_reference', 'exam_names', 'category_ids', 'subject_ids', 'topic_ids',
+      'hint', 'hint_hindi', 'explanation', 'explanation_hindi'
+    ];
+    const sampleRow = [
+      'What is the capital of India?', 'भारत की राजधानी क्या है?',
+      'Mumbai', 'मुंबई', 'Delhi', 'दिल्ली', 'Kolkata', 'कोलकाता',
+      'Chennai', 'चेन्नई', 'None of the above', 'इनमें से कोई नहीं',
+      '1', 'single', '5', '60', 'Sample Reference', 'UPSC|SSC',
+      'cat_id_1|cat_id_2', 'sub_id_1', 'topic_id_1',
+      'Hint text', 'संकेत हिंदी में', 'Explanation text', 'व्याख्या हिंदी में'
+    ];
+    const csvContent = [headers.join(','), sampleRow.join(',')].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'questions_template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showSuccess('Template downloaded successfully!');
+  };
+
+  // Parse Quick Add text format
+  const parseQuickAddText = (text: string) => {
+    const questions: any[] = [];
+    // Split by [Q] marker
+    const blocks = text.split(/\[Q\]/i).filter(b => b.trim());
+
+    for (const block of blocks) {
+      if (!block.trim()) continue;
+
+      const data: any = {
+        question: '',
+        options: { a: '', b: '', c: '', d: '' },
+        answer: '',
+        solution: '',
+        difficulty: null
+      };
+
+      // Extract Difficulty Level [LVL] number
+      const lvlMatch = block.match(/\[LVL\]\s*(\d+)/is);
+      if (lvlMatch) data.difficulty = parseInt(lvlMatch[1]);
+
+      // Extract Question (everything before (a) or [ANS] or [LVL])
+      const qMatch = block.match(/(.*?)((?:\(a\))|\[LVL\]|\[ANS\])/is);
+      if (qMatch) data.question = qMatch[1].trim();
+
+      // Extract Options (a), (b), (c), (d)
+      const optMatches = [...block.matchAll(/\(([a-d])\)\s*(.*?)(?=\s*\([a-d]\)|\s*\[ANS\]|\s*\[SOL\]|$)/gis)];
+      for (const match of optMatches) {
+        data.options[match[1].toLowerCase()] = match[2].trim();
+      }
+
+      // Extract Answer [ANS]
+      const ansMatch = block.match(/\[ANS\]\s*(.*?)(?=\s*\[SOL\]|$)/is);
+      if (ansMatch) data.answer = ansMatch[1].trim().toLowerCase();
+
+      // Extract Solution [SOL]
+      const solMatch = block.match(/\[SOL\]\s*(.*)/is);
+      if (solMatch) data.solution = solMatch[1].trim();
+
+      if (data.question && data.answer) {
+        questions.push(data);
+      }
+    }
+    return questions;
+  };
+
+  // Handle Quick Add Submit
+  const handleQuickAddSubmit = async () => {
+    if (!quickAddEnglish.trim() || !quickAddHindi.trim() || !quickAddCategory) {
+      showError('Please provide English text, Hindi text, and select a category.');
+      return;
+    }
+
+    const enQuestions = parseQuickAddText('[Q]' + quickAddEnglish);
+    const hiQuestions = parseQuickAddText('[Q]' + quickAddHindi);
+
+    if (enQuestions.length !== hiQuestions.length) {
+      showError(`Parsing Error: The number of questions do not match. Found ${enQuestions.length} English questions and ${hiQuestions.length} Hindi questions.`);
+      return;
+    }
+
+    if (enQuestions.length === 0) {
+      showError('No valid questions found. Format: [Q] question... (a)...(b)...(c)...(d)... [ANS]... [SOL]...');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const questionsToCreate = enQuestions.map((qEn, index) => {
+        const qHi = hiQuestions[index];
+        const difficulty = qEn.difficulty || parseInt(quickAddDifficulty) || 5;
+        const answerMap: { [key: string]: number } = { a: 0, b: 1, c: 2, d: 3 };
+
+        return {
+          question_text: qEn.question,
+          question_text_hindi: qHi.question,
+          option_a: qEn.options.a,
+          option_a_hindi: qHi.options.a,
+          option_b: qEn.options.b,
+          option_b_hindi: qHi.options.b,
+          option_c: qEn.options.c,
+          option_c_hindi: qHi.options.c,
+          option_d: qEn.options.d,
+          option_d_hindi: qHi.options.d,
+          correct_answer: answerMap[qEn.answer] ?? 0,
+          answer_type: 'single',
+          difficulty_level: difficulty,
+          time_duration: parseInt(quickAddTime) || 60,
+          question_reference: quickAddSource,
+          category_ids: [quickAddCategory],
+          explanation: qEn.solution,
+          explanation_hindi: qHi.solution,
+          tags: quickAddTags
+        };
+      });
+
+      const response = await questionsAPI.bulkCreate(questionsToCreate);
+      if (response.created > 0) {
+        showSuccess(`${response.created} questions added successfully!`);
+        setQuickAddEnglish('');
+        setQuickAddHindi('');
+        setQuickAddSource('');
+        setQuickAddTags([]);
+        fetchQuestions();
+        setActiveTab('list');
+      } else {
+        showError('No questions were added. Please check your format.');
+      }
+    } catch (error: any) {
+      showError('Failed to add questions', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Add Tags to Selected Questions
+  const handleAddTagsToSelected = async () => {
+    if (selectedQuestions.size === 0) {
+      showError('Please select at least one question.');
+      return;
+    }
+    if (selectedTagsToAdd.length === 0) {
+      showError('Please select at least one tag to add.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await tagsAPI.addToQuestions(Array.from(selectedQuestions), selectedTagsToAdd);
+      showSuccess(`Tags added to ${selectedQuestions.size} questions successfully!`);
+      setShowAddTagsModal(false);
+      setSelectedTagsToAdd([]);
+      setSelectedQuestions(new Set());
+      fetchQuestions();
+    } catch (error: any) {
+      showError('Failed to add tags', error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -498,6 +700,9 @@ const Questions = () => {
             <TabsTrigger value="add" className="rounded-lg sm:rounded-xl text-[10px] sm:text-xs px-2 sm:px-3 py-1.5 sm:py-2 whitespace-nowrap flex-shrink-0">
               Add Question
             </TabsTrigger>
+            <TabsTrigger value="quick" className="rounded-lg sm:rounded-xl text-[10px] sm:text-xs px-2 sm:px-3 py-1.5 sm:py-2 whitespace-nowrap flex-shrink-0">
+              Quick Add
+            </TabsTrigger>
             <TabsTrigger value="bulk" className="rounded-lg sm:rounded-xl text-[10px] sm:text-xs px-2 sm:px-3 py-1.5 sm:py-2 whitespace-nowrap flex-shrink-0">
               Bulk Upload
             </TabsTrigger>
@@ -578,10 +783,21 @@ const Questions = () => {
                   </h2>
                 </div>
                 {selectedQuestions.size > 0 && (
-                  <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs sm:text-sm">
-                    <Trash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                    Delete ({selectedQuestions.size})
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddTagsModal(true)}
+                      className="text-xs sm:text-sm"
+                    >
+                      <Tags className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                      Add Tags ({selectedQuestions.size})
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs sm:text-sm">
+                      <Trash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                      Delete ({selectedQuestions.size})
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -832,7 +1048,158 @@ const Questions = () => {
             </div>
           </TabsContent>
 
+          <TabsContent value="quick" className="space-y-4">
+            <Card className="rounded-xl sm:rounded-[1.5rem] border border-border/70 shadow-lg">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                  <Rocket className="h-4 w-4 sm:h-5 sm:w-5" />
+                  Quick Add Questions
+                </CardTitle>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Paste multiple questions in bulk using a simple text format. Supports both English and Hindi.
+                </p>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6 pt-0 space-y-4 sm:space-y-6">
+                {/* Instructions */}
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 sm:p-4 rounded-r-lg">
+                  <h4 className="text-xs sm:text-sm font-semibold text-blue-800 mb-1">Format Instructions:</h4>
+                  <p className="text-xs text-blue-700 mb-2">
+                    Use markers: <code className="bg-blue-100 px-1 rounded">[Q]</code> for question,
+                    <code className="bg-blue-100 px-1 rounded">(a)</code> for options,
+                    <code className="bg-blue-100 px-1 rounded">[ANS]</code> for answer,
+                    <code className="bg-blue-100 px-1 rounded">[SOL]</code> for solution,
+                    <code className="bg-blue-100 px-1 rounded">[LVL]</code> for difficulty (optional).
+                  </p>
+                  <p className="text-xs text-blue-700 font-mono bg-blue-100/50 p-2 rounded">
+                    [Q] What is 2+2? [LVL] 3<br/>
+                    (a) 3 (b) 4 (c) 5 (d) 6<br/>
+                    [ANS] b [SOL] Basic addition
+                  </p>
+                </div>
+
+                {/* Common Details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div>
+                    <Label className="text-xs sm:text-sm">Category *</Label>
+                    <Select value={quickAddCategory} onValueChange={setQuickAddCategory}>
+                      <SelectTrigger className="mt-1 rounded-lg text-xs sm:text-sm">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id} className="text-xs sm:text-sm">
+                            {cat.name || cat.category_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs sm:text-sm">Default Difficulty</Label>
+                    <Select value={quickAddDifficulty} onValueChange={setQuickAddDifficulty}>
+                      <SelectTrigger className="mt-1 rounded-lg text-xs sm:text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => (
+                          <SelectItem key={l} value={l.toString()} className="text-xs sm:text-sm">Level {l}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs sm:text-sm">Time Limit (seconds)</Label>
+                    <Input
+                      type="number"
+                      value={quickAddTime}
+                      onChange={(e) => setQuickAddTime(e.target.value)}
+                      className="mt-1 rounded-lg text-xs sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs sm:text-sm">Source (Optional)</Label>
+                    <Input
+                      type="text"
+                      placeholder="e.g., RRB Group-D 2022"
+                      value={quickAddSource}
+                      onChange={(e) => setQuickAddSource(e.target.value)}
+                      className="mt-1 rounded-lg text-xs sm:text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Common Tags */}
+                <div>
+                  <Label className="text-xs sm:text-sm">Common Tags (Optional)</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {tags.map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        variant={quickAddTags.includes(tag.id) ? "default" : "outline"}
+                        className="cursor-pointer text-xs"
+                        onClick={() => {
+                          setQuickAddTags(prev =>
+                            prev.includes(tag.id)
+                              ? prev.filter(id => id !== tag.id)
+                              : [...prev, tag.id]
+                          );
+                        }}
+                      >
+                        {tag.tag_name || tag.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Question Text Areas */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                  <div>
+                    <Label className="text-xs sm:text-sm font-medium">English Questions</Label>
+                    <textarea
+                      value={quickAddEnglish}
+                      onChange={(e) => setQuickAddEnglish(e.target.value)}
+                      placeholder="Paste all English questions here...&#10;[Q] What is the capital of France?&#10;(a) London (b) Paris (c) Berlin (d) Madrid&#10;[ANS] b [SOL] Paris is the capital city of France."
+                      className="w-full mt-1 min-h-[250px] sm:min-h-[300px] p-3 sm:p-4 text-xs sm:text-sm font-mono border rounded-lg resize-y focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs sm:text-sm font-medium">Hindi Questions</Label>
+                    <textarea
+                      value={quickAddHindi}
+                      onChange={(e) => setQuickAddHindi(e.target.value)}
+                      placeholder="Paste all Hindi questions here...&#10;[Q] फ्रांस की राजधानी क्या है?&#10;(a) लंदन (b) पेरिस (c) बर्लिन (d) मैड्रिड&#10;[ANS] b [SOL] पेरिस फ्रांस की राजधानी है।"
+                      className="w-full mt-1 min-h-[250px] sm:min-h-[300px] p-3 sm:p-4 text-xs sm:text-sm font-mono border rounded-lg resize-y focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </div>
+                </div>
+
+                {/* Submit Button */}
+                <div className="flex justify-center pt-2 sm:pt-4">
+                  <Button
+                    onClick={handleQuickAddSubmit}
+                    disabled={loading}
+                    className="rounded-lg sm:rounded-xl text-sm sm:text-base px-6 sm:px-8 py-2 sm:py-3"
+                  >
+                    <Rocket className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                    {loading ? 'Processing...' : 'Process and Add Questions'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="bulk" className="space-y-4">
+            <div className="flex justify-end mb-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadTemplate}
+                className="rounded-lg text-xs sm:text-sm"
+              >
+                <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                Download CSV Template
+              </Button>
+            </div>
             <BulkUpload onUpload={handleBulkUpload} />
           </TabsContent>
 
@@ -853,6 +1220,67 @@ const Questions = () => {
             <DuplicateDetector />
           </TabsContent>
         </Tabs>
+
+        {/* Add Tags Modal */}
+        <Dialog open={showAddTagsModal} onOpenChange={setShowAddTagsModal}>
+          <DialogContent className="max-w-[95vw] sm:max-w-md mx-2 sm:mx-4">
+            <DialogHeader>
+              <DialogTitle className="text-sm sm:text-base flex items-center gap-2">
+                <Tags className="h-4 w-4 sm:h-5 sm:w-5" />
+                Add Tags to Selected Questions
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Select one or more tags to add to {selectedQuestions.size} selected question(s).
+              </p>
+              <div className="flex flex-wrap gap-2 max-h-[200px] sm:max-h-[250px] overflow-y-auto p-2 border rounded-lg">
+                {tags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No tags available. Create tags first.</p>
+                ) : (
+                  tags.map((tag) => (
+                    <Badge
+                      key={tag.id}
+                      variant={selectedTagsToAdd.includes(tag.id) ? "default" : "outline"}
+                      className="cursor-pointer text-xs sm:text-sm py-1 px-2 sm:px-3"
+                      onClick={() => {
+                        setSelectedTagsToAdd(prev =>
+                          prev.includes(tag.id)
+                            ? prev.filter(id => id !== tag.id)
+                            : [...prev, tag.id]
+                        );
+                      }}
+                    >
+                      {selectedTagsToAdd.includes(tag.id) && '✓ '}
+                      {tag.tag_name || tag.name}
+                    </Badge>
+                  ))
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowAddTagsModal(false);
+                    setSelectedTagsToAdd([]);
+                  }}
+                  className="text-xs sm:text-sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleAddTagsToSelected}
+                  disabled={loading || selectedTagsToAdd.length === 0}
+                  className="text-xs sm:text-sm"
+                >
+                  {loading ? 'Adding...' : 'Apply Tags'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );

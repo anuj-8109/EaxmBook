@@ -147,6 +147,11 @@ const questionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Topic',
   }],
+  // Tags for question categorization
+  tag_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tag',
+  }],
   // Single select (for backward compatibility)
   category_id: {
     type: mongoose.Schema.Types.ObjectId,
