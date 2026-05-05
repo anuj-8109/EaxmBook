@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
-import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X, Trash, Download, Rocket, Tags, HelpCircle, FolderTree, BookOpen, Tag, RotateCcw, Check, ChevronsUpDown, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X, Trash, Download, Rocket, Tags, HelpCircle, FolderTree, BookOpen, Tag, RotateCcw, Check, ChevronsUpDown, CheckCircle2, Globe, Star } from 'lucide-react';
+
 import { Checkbox } from '@/components/ui/checkbox';
 import { showError, showSuccess, showWarning, showInfo, showDeleteConfirm } from '@/lib/sweetalert';
 import { questionsAPI, tagsAPI, categoriesAPI, subjectsAPI, topicsAPI } from '@/lib/api';
@@ -78,6 +79,7 @@ const Questions = () => {
   const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
+  const [languageFilter, setLanguageFilter] = useState<string>('all');
   const [filterExamName, setFilterExamName] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
   const [filterTopic, setFilterTopic] = useState('');
@@ -242,12 +244,16 @@ const Questions = () => {
 
   useEffect(() => {
     filterQuestions();
-  }, [questions, searchQuery, filterDifficulty, filterExamName, filterSubject, filterTopic]);
+  }, [questions, searchQuery, filterDifficulty, filterExamName, filterSubject, filterTopic, languageFilter]);
 
   const fetchQuestions = async () => {
     setLoading(true);
     try {
-      const data = await questionsAPI.getAll({ page: currentPage, limit: itemsPerPage });
+      const params: any = { page: currentPage, limit: itemsPerPage };
+      if (filterDifficulty !== 'all') params.difficulty_level = filterDifficulty;
+      if (languageFilter !== 'all') params.language = languageFilter;
+      
+      const data = await questionsAPI.getAll(params);
       // Handle paginated response: {questions: [...], total: 75, page: 1, limit: 50}
       // or direct array response
       if (data && Array.isArray(data)) {
@@ -488,31 +494,39 @@ const Questions = () => {
   // Download CSV Template
   const handleDownloadTemplate = () => {
     const headers = [
-      'question_text', 'question_text_hindi', 'option_a', 'option_a_hindi',
-      'option_b', 'option_b_hindi', 'option_c', 'option_c_hindi',
-      'option_d', 'option_d_hindi', 'option_x', 'option_x_hindi',
+      'question_text', 'question_text_hindi', 
+      'option_a', 'option_a_hindi',
+      'option_b', 'option_b_hindi', 
+      'option_c', 'option_c_hindi',
+      'option_d', 'option_d_hindi', 
+      'option_x', 'option_x_hindi',
       'correct_answer', 'answer_type', 'difficulty_level', 'time_duration',
       'question_reference', 'exam_names', 'category_ids', 'subject_ids', 'topic_ids',
       'hint', 'hint_hindi', 'explanation', 'explanation_hindi'
     ];
     const sampleRow = [
       'What is the capital of India?', 'भारत की राजधानी क्या है?',
-      'Mumbai', 'मुंबई', 'Delhi', 'दिल्ली', 'Kolkata', 'कोलकाता',
-      'Chennai', 'चेन्नई', 'None of the above', 'इनमें से कोई नहीं',
-      '1', 'single', '5', '60', 'Sample Reference', 'UPSC|SSC',
-      'cat_id_1|cat_id_2', 'sub_id_1', 'topic_id_1',
-      'Hint text', 'संकेत हिंदी में', 'Explanation text', 'व्याख्या हिंदी में'
+      'Delhi', 'दिल्ली', 
+      'Mumbai', 'मुंबई', 
+      'Kolkata', 'कोलकाता',
+      'Chennai', 'चेन्नई', 
+      'None', 'कोई नहीं',
+      '0', 'single', '5', '60', 'Sample Reference', 'SSC|UPSC',
+      'cat_id', 'sub_id', 'topic_id',
+      'It is in North India', 'यह उत्तर भारत में है', 
+      'New Delhi became the capital in 1911', 'नई दिल्ली 1911 में राजधानी बनी'
     ];
-    const csvContent = [headers.join(','), sampleRow.join(',')].join('\n');
+    const csvContent = [headers.join(','), sampleRow.map(v => `"${v}"`).join(',')].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'questions_template.csv';
+    link.download = 'bilingual_questions_template.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showSuccess('Template downloaded successfully!');
+    showSuccess('Bilingual template downloaded!');
   };
+
 
   // Parse Quick Add text format
   const parseQuickAddText = (text: string) => {
@@ -562,53 +576,63 @@ const Questions = () => {
 
   // Handle Quick Add Submit
   const handleQuickAddSubmit = async () => {
-    if (!quickAddEnglish.trim() || !quickAddHindi.trim() || !quickAddCategory) {
-      showError('Please provide English text, Hindi text, and select a category.');
+    const hasEnglish = quickAddEnglish.trim().length > 0;
+    const hasHindi = quickAddHindi.trim().length > 0;
+
+    if (!hasEnglish && !hasHindi) {
+      showError('Please provide at least English or Hindi question text.');
       return;
     }
 
-    const enQuestions = parseQuickAddText('[Q]' + quickAddEnglish);
-    const hiQuestions = parseQuickAddText('[Q]' + quickAddHindi);
+    const enQuestions = hasEnglish ? parseQuickAddText('[Q]' + quickAddEnglish) : [];
+    const hiQuestions = hasHindi ? parseQuickAddText('[Q]' + quickAddHindi) : [];
 
-    if (enQuestions.length !== hiQuestions.length) {
+    // Validation for bilingual consistency ONLY if both are provided
+    if (hasEnglish && hasHindi && enQuestions.length !== hiQuestions.length) {
       showError(`Parsing Error: The number of questions do not match. Found ${enQuestions.length} English questions and ${hiQuestions.length} Hindi questions.`);
       return;
     }
 
-    if (enQuestions.length === 0) {
-      showError('No valid questions found. Format: [Q] question... (a)...(b)...(c)...(d)... [ANS]... [SOL]...');
+    const questionCount = Math.max(enQuestions.length, hiQuestions.length);
+    if (questionCount === 0) {
+      showError('No valid questions found. Please check your format (e.g., [Q] question... (a) option...)');
       return;
     }
 
     setLoading(true);
     try {
-      const questionsToCreate = enQuestions.map((qEn, index) => {
-        const qHi = hiQuestions[index];
-        const difficulty = qEn.difficulty || parseInt(quickAddDifficulty) || 5;
+      const questionsToCreate = [];
+      
+      for (let i = 0; i < questionCount; i++) {
+        const qEn = enQuestions[i] || { options: {}, question: '', answer: '', solution: '', difficulty: null };
+        const qHi = hiQuestions[i] || { options: {}, question: '', answer: '', solution: '', difficulty: null };
+        
+        const difficulty = qEn.difficulty || qHi.difficulty || parseInt(quickAddDifficulty) || 5;
         const answerMap: { [key: string]: number } = { a: 0, b: 1, c: 2, d: 3 };
+        const rawAns = qEn.answer || qHi.answer || 'a';
 
-        return {
-          question_text: qEn.question,
-          question_text_hindi: qHi.question,
-          option_a: qEn.options.a,
-          option_a_hindi: qHi.options.a,
-          option_b: qEn.options.b,
-          option_b_hindi: qHi.options.b,
-          option_c: qEn.options.c,
-          option_c_hindi: qHi.options.c,
-          option_d: qEn.options.d,
-          option_d_hindi: qHi.options.d,
-          correct_answer: answerMap[qEn.answer] ?? 0,
+        questionsToCreate.push({
+          question_text: qEn.question || qHi.question || '', // Fallback to other language if one is missing
+          question_text_hindi: qHi.question || '',
+          option_a: qEn.options.a || qHi.options.a || '',
+          option_a_hindi: qHi.options.a || '',
+          option_b: qEn.options.b || qHi.options.b || '',
+          option_b_hindi: qHi.options.b || '',
+          option_c: qEn.options.c || qHi.options.c || '',
+          option_c_hindi: qHi.options.c || '',
+          option_d: qEn.options.d || qHi.options.d || '',
+          option_d_hindi: qHi.options.d || '',
+          correct_answer: answerMap[rawAns] ?? 0,
           answer_type: 'single',
           difficulty_level: difficulty,
           time_duration: parseInt(quickAddTime) || 60,
           question_reference: quickAddSource,
-          category_ids: [quickAddCategory],
-          explanation: qEn.solution,
-          explanation_hindi: qHi.solution,
+          category_ids: quickAddCategory ? [quickAddCategory] : [],
+          explanation: qEn.solution || qHi.solution || '',
+          explanation_hindi: qHi.solution || '',
           tags: quickAddTags
-        };
-      });
+        });
+      }
 
       const response = await questionsAPI.bulkCreate(questionsToCreate);
       if (response.created > 0) {
@@ -785,19 +809,31 @@ const Questions = () => {
         if (rows.length >= 2) {
           const headerCells = Array.from(rows[0].querySelectorAll('td, th'));
           const headers = headerCells.map(th => {
+
             let text = th.textContent?.trim().toLowerCase() || '';
             if (text.includes('difficulty')) return 'difficulty_level';
-            if (text.includes('question text hindi')) return 'question_text_hindi';
+            if (text.includes('hindi') && text.includes('question')) return 'question_text_hindi';
+            if (text.includes('hindi') && text.includes('a')) return 'option_a_hindi';
+            if (text.includes('hindi') && text.includes('b')) return 'option_b_hindi';
+            if (text.includes('hindi') && text.includes('c')) return 'option_c_hindi';
+            if (text.includes('hindi') && text.includes('d')) return 'option_d_hindi';
+            if (text.includes('hindi') && text.includes('hint')) return 'hint_hindi';
+            if (text.includes('hindi') && text.includes('explanation')) return 'explanation_hindi';
+            if (text.includes('hindi') && text.includes('solution')) return 'explanation_hindi';
+            
             if (text === 'question' || text.includes('question')) return 'question_text';
-            if (text.includes('option a')) return 'option_a';
-            if (text.includes('option b')) return 'option_b';
-            if (text.includes('option c')) return 'option_c';
-            if (text.includes('option d')) return 'option_d';
-            if (text.includes('answer')) return 'correct_answer';
-            if (text.includes('explanation')) return 'explanation';
+            if (text.includes('option a') || (text.includes('option') && text.includes('a'))) return 'option_a';
+            if (text.includes('option b') || (text.includes('option') && text.includes('b'))) return 'option_b';
+            if (text.includes('option c') || (text.includes('option') && text.includes('c'))) return 'option_c';
+            if (text.includes('option d') || (text.includes('option') && text.includes('d'))) return 'option_d';
+            if (text.includes('answer') || text.includes('correct')) return 'correct_answer';
+            if (text.includes('explanation') || text.includes('solution')) return 'explanation';
             if (text.includes('hint')) return 'hint';
+            if (text.includes('exam')) return 'exam_names';
+            if (text.includes('reference')) return 'question_reference';
             return text.replace(/\s+/g, '_');
           });
+
 
           for (let i = 1; i < rows.length; i++) {
             const cells = Array.from(rows[i].querySelectorAll('td, th'));
@@ -1092,67 +1128,112 @@ const Questions = () => {
 
           <TabsContent value="list" className="space-y-3 sm:space-y-4">
             {/* Filters */}
-            <Card className="rounded-xl border border-border/70 shadow-sm bg-gray-50/50">
-              <CardContent className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                  <div className="lg:col-span-2">
-                    <Label className="text-[11px] font-bold text-gray-500 mb-1 flex items-center gap-1">
-                      <Search className="h-3 w-3" /> Search
+            {/* Modernized Filters Section */}
+            <Card className="rounded-2xl border border-gray-100 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md">
+              <div className="bg-gray-50/50 border-b border-gray-100 px-5 py-3 flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                  <Filter className="h-3.5 w-3.5" />
+                  Filter Questions
+                </h3>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="xs" 
+                    className="h-7 px-2 text-[10px] font-bold text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setFilterDifficulty('all');
+                      setLanguageFilter('all');
+                      setFilterExamName('');
+                      setFilterSubject('');
+                      setFilterTopic('');
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Reset All
+                  </Button>
+                </div>
+              </div>
+              <CardContent className="p-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+                  {/* Search Field */}
+                  <div className="xl:col-span-2">
+                    <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                      <Search className="h-3 w-3 text-indigo-500" /> Search Content
                     </Label>
-                    <Input
-                      placeholder="Search questions..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-9 text-xs rounded-md border-gray-300"
-                    />
+                    <div className="relative group">
+                      <Input
+                        placeholder="Search by text or keywords..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 pl-9 focus:bg-white transition-all group-hover:border-indigo-200"
+                      />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                    </div>
                   </div>
+
+                  {/* Language Selector */}
                   <div>
-                    <Label className="text-[11px] font-bold text-gray-500 mb-1 flex items-center gap-1">
-                      <FolderTree className="h-3 w-3" /> Exam Name
+                    <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                      <Globe className="h-3 w-3 text-indigo-500" /> Language
+                    </Label>
+                    <Select value={languageFilter} onValueChange={setLanguageFilter}>
+                      <SelectTrigger className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
+                        <SelectValue placeholder="All Languages" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                        <SelectItem value="all">All Languages</SelectItem>
+                        <SelectItem value="english">English Only</SelectItem>
+                        <SelectItem value="hindi">Hindi Only</SelectItem>
+                        <SelectItem value="bilingual">Bilingual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Exam Name Selector */}
+                  <div>
+                    <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                      <FolderTree className="h-3 w-3 text-indigo-500" /> Exam
                     </Label>
                     <Popover open={openExamSearch} onOpenChange={setOpenExamSearch}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          aria-expanded={openExamSearch}
-                          className="h-9 w-full justify-between text-xs font-normal border-gray-300 rounded-md bg-white hover:bg-white"
+                          className="h-10 w-full justify-between text-xs font-medium border-gray-200 rounded-xl bg-gray-50/30 hover:bg-white hover:border-indigo-200 transition-all text-left px-3"
                         >
-                          {filterExamName && filterExamName !== 'all'
-                            ? filterExamName
-                            : "All Exams"}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          <span className="truncate">
+                            {filterExamName && filterExamName !== 'all' ? filterExamName : "All Exams"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-40" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0">
+                      <PopoverContent className="w-[200px] p-0 rounded-xl shadow-xl border-gray-100">
                         <Command>
-                          <CommandInput placeholder="Search exam..." className="h-9 text-xs" />
-                          <CommandEmpty className="text-[11px] py-2 text-center">No exam found.</CommandEmpty>
-                          <CommandGroup className="max-h-[200px] overflow-y-auto">
+                          <CommandInput placeholder="Search exam..." className="h-10 text-xs" />
+                          <CommandEmpty className="text-[10px] py-4 text-center text-gray-400">No exam found.</CommandEmpty>
+                          <CommandGroup className="max-h-[220px] overflow-y-auto">
                             <CommandItem
-                              className="text-xs"
+                              className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                               onSelect={() => {
                                 setFilterExamName("all");
                                 setOpenExamSearch(false);
                               }}
                             >
-                              <Check
-                                className={`mr-2 h-4 w-4 ${filterExamName === "all" ? "opacity-100" : "opacity-0"}`}
-                              />
+                              <Check className={`mr-2 h-3.5 w-3.5 ${filterExamName === "all" ? "text-indigo-600" : "opacity-0"}`} />
                               All Exams
                             </CommandItem>
                             {categories.map((cat) => (
                               <CommandItem
                                 key={cat._id || cat.id}
-                                className="text-xs"
+                                className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                                 onSelect={() => {
                                   setFilterExamName(cat.name || cat.category_name);
                                   setOpenExamSearch(false);
                                 }}
                               >
-                                <Check
-                                  className={`mr-2 h-4 w-4 ${filterExamName === (cat.name || cat.category_name) ? "opacity-100" : "opacity-0"}`}
-                                />
+                                <Check className={`mr-2 h-3.5 w-3.5 ${filterExamName === (cat.name || cat.category_name) ? "text-indigo-600" : "opacity-0"}`} />
                                 {cat.name || cat.category_name}
                               </CommandItem>
                             ))}
@@ -1161,53 +1242,50 @@ const Questions = () => {
                       </PopoverContent>
                     </Popover>
                   </div>
+
+                  {/* Subject Selector */}
                   <div>
-                    <Label className="text-[11px] font-bold text-gray-500 mb-1 flex items-center gap-1">
-                      <BookOpen className="h-3 w-3" /> Subject
+                    <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                      <BookOpen className="h-3 w-3 text-indigo-500" /> Subject
                     </Label>
                     <Popover open={openSubjectSearch} onOpenChange={setOpenSubjectSearch}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          aria-expanded={openSubjectSearch}
-                          className="h-9 w-full justify-between text-xs font-normal border-gray-300 rounded-md bg-white hover:bg-white"
+                          className="h-10 w-full justify-between text-xs font-medium border-gray-200 rounded-xl bg-gray-50/30 hover:bg-white hover:border-indigo-200 transition-all text-left px-3"
                         >
-                          {filterSubject && filterSubject !== 'all'
-                            ? filterSubject
-                            : "All Subjects"}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          <span className="truncate">
+                            {filterSubject && filterSubject !== 'all' ? filterSubject : "All Subjects"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-40" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0">
+                      <PopoverContent className="w-[200px] p-0 rounded-xl shadow-xl border-gray-100">
                         <Command>
-                          <CommandInput placeholder="Search subject..." className="h-9 text-xs" />
-                          <CommandEmpty className="text-[11px] py-2 text-center">No subject found.</CommandEmpty>
-                          <CommandGroup className="max-h-[200px] overflow-y-auto">
+                          <CommandInput placeholder="Search subject..." className="h-10 text-xs" />
+                          <CommandEmpty className="text-[10px] py-4 text-center text-gray-400">No subject found.</CommandEmpty>
+                          <CommandGroup className="max-h-[220px] overflow-y-auto">
                             <CommandItem
-                              className="text-xs"
+                              className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                               onSelect={() => {
                                 setFilterSubject("all");
                                 setOpenSubjectSearch(false);
                               }}
                             >
-                              <Check
-                                className={`mr-2 h-4 w-4 ${filterSubject === "all" ? "opacity-100" : "opacity-0"}`}
-                              />
+                              <Check className={`mr-2 h-3.5 w-3.5 ${filterSubject === "all" ? "text-indigo-600" : "opacity-0"}`} />
                               All Subjects
                             </CommandItem>
                             {subjects.map((sub) => (
                               <CommandItem
                                 key={sub._id || sub.id}
-                                className="text-xs"
+                                className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                                 onSelect={() => {
                                   setFilterSubject(sub.name || sub.subject_name);
                                   setOpenSubjectSearch(false);
                                 }}
                               >
-                                <Check
-                                  className={`mr-2 h-4 w-4 ${filterSubject === (sub.name || sub.subject_name) ? "opacity-100" : "opacity-0"}`}
-                                />
+                                <Check className={`mr-2 h-3.5 w-3.5 ${filterSubject === (sub.name || sub.subject_name) ? "text-indigo-600" : "opacity-0"}`} />
                                 {sub.name || sub.subject_name}
                               </CommandItem>
                             ))}
@@ -1216,53 +1294,50 @@ const Questions = () => {
                       </PopoverContent>
                     </Popover>
                   </div>
+
+                  {/* Topic Selector */}
                   <div>
-                    <Label className="text-[11px] font-bold text-gray-500 mb-1 flex items-center gap-1">
-                      <Tag className="h-3 w-3" /> Topic
+                    <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                      <Tag className="h-3 w-3 text-indigo-500" /> Topic
                     </Label>
                     <Popover open={openTopicSearch} onOpenChange={setOpenTopicSearch}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          aria-expanded={openTopicSearch}
-                          className="h-9 w-full justify-between text-xs font-normal border-gray-300 rounded-md bg-white hover:bg-white"
+                          className="h-10 w-full justify-between text-xs font-medium border-gray-200 rounded-xl bg-gray-50/30 hover:bg-white hover:border-indigo-200 transition-all text-left px-3"
                         >
-                          {filterTopic && filterTopic !== 'all'
-                            ? filterTopic
-                            : "All Topics"}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          <span className="truncate">
+                            {filterTopic && filterTopic !== 'all' ? filterTopic : "All Topics"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-40" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0">
+                      <PopoverContent className="w-[200px] p-0 rounded-xl shadow-xl border-gray-100">
                         <Command>
-                          <CommandInput placeholder="Search topic..." className="h-9 text-xs" />
-                          <CommandEmpty className="text-[11px] py-2 text-center">No topic found.</CommandEmpty>
-                          <CommandGroup className="max-h-[200px] overflow-y-auto">
+                          <CommandInput placeholder="Search topic..." className="h-10 text-xs" />
+                          <CommandEmpty className="text-[10px] py-4 text-center text-gray-400">No topic found.</CommandEmpty>
+                          <CommandGroup className="max-h-[220px] overflow-y-auto">
                             <CommandItem
-                              className="text-xs"
+                              className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                               onSelect={() => {
                                 setFilterTopic("all");
                                 setOpenTopicSearch(false);
                               }}
                             >
-                              <Check
-                                className={`mr-2 h-4 w-4 ${filterTopic === "all" ? "opacity-100" : "opacity-0"}`}
-                              />
+                              <Check className={`mr-2 h-3.5 w-3.5 ${filterTopic === "all" ? "text-indigo-600" : "opacity-0"}`} />
                               All Topics
                             </CommandItem>
                             {topics.map((topic) => (
                               <CommandItem
                                 key={topic._id || topic.id}
-                                className="text-xs"
+                                className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                                 onSelect={() => {
                                   setFilterTopic(topic.name || topic.topic_name);
                                   setOpenTopicSearch(false);
                                 }}
                               >
-                                <Check
-                                  className={`mr-2 h-4 w-4 ${filterTopic === (topic.name || topic.topic_name) ? "opacity-100" : "opacity-0"}`}
-                                />
+                                <Check className={`mr-2 h-3.5 w-3.5 ${filterTopic === (topic.name || topic.topic_name) ? "text-indigo-600" : "opacity-0"}`} />
                                 {topic.name || topic.topic_name}
                               </CommandItem>
                             ))}
@@ -1271,69 +1346,65 @@ const Questions = () => {
                       </PopoverContent>
                     </Popover>
                   </div>
-                  <div>
-                    <Label className="text-[11px] font-bold text-gray-500 mb-1">Difficulty</Label>
-                    <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
-                      <SelectTrigger className="h-9 text-xs rounded-md border-gray-300">
-                        <SelectValue placeholder="All" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => <SelectItem key={l} value={l.toString()}>{l}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-[11px] font-bold text-gray-500 mb-1">Type</Label>
-                    <Select defaultValue="all">
-                      <SelectTrigger className="h-9 text-xs rounded-md border-gray-300">
-                        <SelectValue placeholder="All" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between">
-                   <div className="flex gap-2">
-                     <Button 
-                       variant="outline" 
-                       size="sm" 
-                       className="h-8 px-2 rounded-md border-gray-300 text-gray-500 hover:text-gray-700"
-                       onClick={() => {
-                         setSearchQuery('');
-                         setFilterDifficulty('all');
-                         setFilterExamName('');
-                         setFilterSubject('');
-                         setFilterTopic('');
-                         setCurrentPage(1);
-                       }}
-                       title="Reset Filters"
-                     >
-                       <RotateCcw className="h-4 w-4" />
-                     </Button>
-                     <Button variant="outline" size="sm" className="h-8 px-2 rounded-md border-gray-300 text-gray-500">
-                       <Rocket className="h-4 w-4" />
-                     </Button>
-                   </div>
-                   <div className="flex items-center gap-2">
-                     <Label className="text-[11px] font-bold text-gray-500">Per Page</Label>
-                     <Select value={itemsPerPage.toString()} onValueChange={(val) => setItemsPerPage(parseInt(val))}>
-                       <SelectTrigger className="h-8 w-20 text-xs rounded-md border-gray-300">
-                         <SelectValue />
-                       </SelectTrigger>
-                       <SelectContent>
-                         <SelectItem value="10">10</SelectItem>
-                         <SelectItem value="25">25</SelectItem>
-                         <SelectItem value="50">50</SelectItem>
-                         <SelectItem value="100">100</SelectItem>
-                       </SelectContent>
-                     </Select>
-                   </div>
+
+                {/* Second Row of Filters */}
+                <div className="mt-6 pt-6 border-t border-gray-50 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-6">
+                    {/* Difficulty Filter */}
+                    <div className="flex items-center gap-3">
+                      <Label className="text-[11px] font-bold text-slate-500 whitespace-nowrap">
+                        Difficulty Level
+                      </Label>
+                      <div className="flex gap-1.5 bg-gray-100/50 p-1 rounded-xl border border-gray-200">
+                        {['all', '1', '3', '5', '7', '9'].map((val) => (
+                          <button
+                            key={val}
+                            onClick={() => setFilterDifficulty(val)}
+                            className={`h-7 min-w-[32px] px-2 rounded-lg text-[10px] font-bold transition-all ${
+                              filterDifficulty === val 
+                                ? "bg-white text-indigo-600 shadow-sm ring-1 ring-black/5" 
+                                : "text-gray-400 hover:text-gray-600"
+                            }`}
+                          >
+                            {val === 'all' ? 'ALL' : val}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Quick Access Icons */}
+                    <div className="h-6 w-px bg-gray-100 hidden sm:block" />
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-lg border-gray-200 text-gray-400 hover:text-indigo-600 transition-all hover:border-indigo-200 hover:bg-indigo-50">
+                        <Rocket className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-lg border-gray-200 text-gray-400 hover:text-indigo-600 transition-all hover:border-indigo-200 hover:bg-indigo-50">
+                        <Star className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6">
+                    {/* Items Per Page */}
+                    <div className="flex items-center gap-3 bg-gray-50/50 px-3 py-1.5 rounded-xl border border-gray-100">
+                      <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight whitespace-nowrap">Show</Label>
+                      <select 
+                        value={itemsPerPage.toString()} 
+                        onChange={(e) => setItemsPerPage(parseInt(e.target.value))}
+                        className="bg-transparent border-none text-[11px] font-bold text-indigo-600 focus:ring-0 cursor-pointer"
+                      >
+                        <option value="10">10 results</option>
+                        <option value="25">25 results</option>
+                        <option value="50">50 results</option>
+                        <option value="100">100 results</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
+
 
             {/* Questions List */}
             <div className="space-y-3 sm:space-y-4">
@@ -1545,7 +1616,14 @@ const Questions = () => {
                     currentPage={currentPage}
                     totalPages={totalPages}
                     onPageChange={setCurrentPage}
+                    itemsPerPage={itemsPerPage}
+                    onItemsPerPageChange={(newItemsPerPage) => {
+                      setItemsPerPage(newItemsPerPage);
+                      setCurrentPage(1);
+                    }}
+                    totalItems={totalQuestionsCount}
                   />
+
                 </div>
               )}
             </div>
@@ -1609,7 +1687,8 @@ const Questions = () => {
                 {/* Common Details */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   <div>
-                    <Label className="text-xs sm:text-sm">Category *</Label>
+                    <Label className="text-xs sm:text-sm">Category (Optional)</Label>
+
                     <Select value={quickAddCategory} onValueChange={setQuickAddCategory}>
                       <SelectTrigger className="mt-1 rounded-lg text-xs sm:text-sm">
                         <SelectValue placeholder="Select category" />
@@ -1683,7 +1762,7 @@ const Questions = () => {
                 {/* Question Text Areas */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                   <div>
-                    <Label className="text-xs sm:text-sm font-medium">English Questions</Label>
+                    <Label className="text-xs sm:text-sm font-medium">English Questions (Optional)</Label>
                     <textarea
                       value={quickAddEnglish}
                       onChange={(e) => setQuickAddEnglish(e.target.value)}
@@ -1692,7 +1771,7 @@ const Questions = () => {
                     />
                   </div>
                   <div>
-                    <Label className="text-xs sm:text-sm font-medium">Hindi Questions</Label>
+                    <Label className="text-xs sm:text-sm font-medium">Hindi Questions (Optional)</Label>
                     <textarea
                       value={quickAddHindi}
                       onChange={(e) => setQuickAddHindi(e.target.value)}
@@ -1752,7 +1831,8 @@ const Questions = () => {
 
         {/* View Question Modal */}
         <Dialog open={!!viewingQuestion} onOpenChange={(open) => !open && setViewingQuestion(null)}>
-          <DialogContent className="max-w-[95vw] sm:max-w-3xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-4 p-0 rounded-xl overflow-hidden">
+          <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[95vh] overflow-y-auto mx-2 sm:mx-4 p-0 rounded-2xl border-none shadow-2xl bg-white">
+
             <DialogHeader className="p-4 sm:p-6 bg-gray-50 border-b">
               <DialogTitle className="text-sm sm:text-base font-bold flex items-center gap-2">
                 <Eye className="h-4 w-4 text-blue-600" />
@@ -1761,15 +1841,45 @@ const Questions = () => {
             </DialogHeader>
             {viewingQuestion && (
               <div className="p-4 sm:p-8 space-y-6">
+                {/* Language Toggle in Modal */}
+                <div className="flex items-center justify-between pb-2">
+                  <div className="flex bg-gray-100 p-1 rounded-lg">
+                    {['both', 'english', 'hindi'].map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => setLanguageFilter(lang)}
+                        className={`px-3 py-1 text-[10px] font-bold uppercase rounded-md transition-all ${
+                          languageFilter === lang 
+                            ? 'bg-white text-blue-600 shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        {lang}
+                      </button>
+                    ))}
+                  </div>
+                  <Badge variant="outline" className="text-[10px] font-medium border-blue-200 text-blue-600 bg-blue-50">
+                    Bilingual Content Detected
+                  </Badge>
+                </div>
+
                 <div className="space-y-2">
                   <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">The Question</Label>
-                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <p className="font-semibold text-sm sm:text-base text-gray-800 break-words leading-relaxed">{viewingQuestion.question_text}</p>
-                    {viewingQuestion.question_text_hindi && (
-                      <div className="mt-3 pt-3 border-t border-gray-200/50">
-                        <p className="text-xs sm:text-sm text-gray-600 font-medium break-words leading-relaxed">{viewingQuestion.question_text_hindi}</p>
-                      </div>
-                    )}
+                  <div className="p-5 bg-gray-50 rounded-xl border border-gray-100 text-sm sm:text-base text-gray-800 leading-relaxed font-medium">
+                    <div className="flex flex-col gap-4">
+                      {(languageFilter === 'both' || languageFilter === 'english') && viewingQuestion.question_text && (
+                        <div className="flex gap-3">
+                          <span className="shrink-0 px-1.5 py-0.5 h-fit rounded text-[8px] font-bold bg-blue-100 text-blue-600 uppercase tracking-tight">EN</span>
+                          <p>{viewingQuestion.question_text}</p>
+                        </div>
+                      )}
+                      {(languageFilter === 'both' || languageFilter === 'hindi') && viewingQuestion.question_text_hindi && (
+                        <div className="flex gap-3 pt-3 border-t border-gray-200">
+                          <span className="shrink-0 px-1.5 py-0.5 h-fit rounded text-[8px] font-bold bg-orange-100 text-orange-600 uppercase tracking-tight">HI</span>
+                          <p className="text-gray-700 font-hindi">{viewingQuestion.question_text_hindi}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1801,14 +1911,16 @@ const Questions = () => {
                               {opt.label}
                             </span>
                             <div className="flex-1 min-w-0 space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
-                                <p className={`text-xs sm:text-sm font-medium ${isCorrect ? 'text-green-800' : 'text-gray-700'}`}>{opt.text}</p>
-                              </div>
-                              {opt.hindi && (
-                                <div className="flex items-center gap-2 pt-2 border-t border-gray-50">
+                              {(languageFilter === 'both' || languageFilter === 'english') && opt.text && (
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
+                                  <p className={`text-xs sm:text-sm font-medium ${isCorrect ? 'text-green-800' : 'text-gray-700'}`}>{opt.text}</p>
+                                </div>
+                              )}
+                              {(languageFilter === 'both' || languageFilter === 'hindi') && opt.hindi && (
+                                <div className={`flex items-center gap-2 ${(languageFilter === 'both' && opt.text) ? 'pt-2 border-t border-gray-50' : ''}`}>
                                   <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
-                                  <p className="text-xs sm:text-sm text-gray-600 font-medium">{opt.hindi}</p>
+                                  <p className={`text-xs sm:text-sm font-medium font-hindi ${isCorrect ? 'text-green-800' : 'text-gray-600 italic'}`}>{opt.hindi}</p>
                                 </div>
                               )}
                             </div>

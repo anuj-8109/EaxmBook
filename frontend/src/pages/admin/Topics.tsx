@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { topicsAPI, subjectsAPI, categoriesAPI, aiAPI } from '@/lib/api';
-import { Plus, Pencil, Trash2, BookOpen, Search, Filter, X, ChevronLeft, ChevronRight, Tag, Bot, Loader2, Trash } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, Search, Filter, X, ChevronLeft, ChevronRight, Tag, Bot, Loader2, Trash, FolderTree, RotateCcw } from 'lucide-react';
+
 import { toast } from 'sonner';
 import Loader from '@/components/Loader';
 import { PaginationControls } from '@/components/PaginationControls';
@@ -56,7 +57,8 @@ const Topics = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   
   // Server-side Pagination states
   const [totalPages, setTotalPages] = useState(1);
@@ -67,7 +69,7 @@ const Topics = () => {
 
   useEffect(() => {
     fetchData();
-  }, [currentPage, selectedSubject]);
+  }, [currentPage, itemsPerPage, selectedSubject]);
 
   // Fetch subjects when category changes
   useEffect(() => {
@@ -380,114 +382,115 @@ const Topics = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Filters Section - Collapsible */}
-        <div className="relative">
-          {/* Side Filter Toggle Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className={`absolute right-0 top-0 z-10 rounded-l-xl rounded-r-none border-r-0 ${showFilters ? 'rounded-bl-none' : ''
-              }`}
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-            {hasActiveFilters && (
-              <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-                {[searchQuery, selectedSubject !== 'all', selectedCategory !== 'all'].filter(Boolean).length}
-              </span>
-            )}
-            {showFilters ? (
-              <ChevronRight className="h-4 w-4 ml-2" />
-            ) : (
-              <ChevronLeft className="h-4 w-4 ml-2" />
-            )}
-          </Button>
-
-          {/* Filter Card */}
-          {showFilters && (
-            <Card className="border border-border/70 rounded-xl rounded-tr-none">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between pr-24">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4" />
-                    <CardTitle className="text-base">Filters</CardTitle>
-                  </div>
-                  {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="h-8 text-xs"
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Clear All
-                    </Button>
-                  )}
+        {/* Modernized Filters Section */}
+        <Card className="rounded-2xl border border-gray-100 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md">
+          <div className="bg-gray-50/50 border-b border-gray-100 px-5 py-3 flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+              <Filter className="h-3.5 w-3.5" />
+              Filter Topics
+            </h3>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="xs" 
+                className="h-7 px-2 text-[10px] font-bold text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                onClick={clearFilters}
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reset All
+              </Button>
+            </div>
+          </div>
+          <CardContent className="p-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Search */}
+              <div className="md:col-span-1">
+                <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                  <Search className="h-3 w-3 text-indigo-500" /> Search Topics
+                </Label>
+                <div className="relative group">
+                  <Input
+                    placeholder="Search name or description..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 pl-9 focus:bg-white transition-all group-hover:border-indigo-200"
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Search */}
-                  <div className="space-y-2">
-                    <Label>Search Topics</Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by name or description..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 rounded-xl"
-                      />
-                    </div>
-                  </div>
+              </div>
 
-                  {/* Category Filter */}
-                  <div className="space-y-2">
-                    <Label>Exam Name (Filter Subjects)</Label>
-                    <Select value={selectedCategory || 'all'} onValueChange={setSelectedCategory}>
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="All Exam Names" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Exam Names</SelectItem>
-                        {categories.map(cat => (
-                          <SelectItem key={cat._id || cat.id} value={(cat._id || cat.id)?.toString()}>
-                            {cat.icon} {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {/* Category Filter */}
+              <div>
+                <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                  <FolderTree className="h-3 w-3 text-indigo-500" /> Exam Name
+                </Label>
+                <Select value={selectedCategory || 'all'} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
+                    <SelectValue placeholder="All Exam Names" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                    <SelectItem value="all">All Exam Names</SelectItem>
+                    {categories.map(cat => (
+                      <SelectItem key={cat._id || cat.id} value={(cat._id || cat.id)?.toString()}>
+                        {cat.icon} {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  {/* Subject Filter */}
-                  <div className="space-y-2">
-                    <Label>Subject</Label>
-                    <Select value={selectedSubject || 'all'} onValueChange={setSelectedSubject}>
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="All Subjects" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Subjects</SelectItem>
-                        {subjects.map(sub => {
-                          const subId = sub._id || sub.id;
-                          const category = sub.category_id && typeof sub.category_id === 'object'
-                            ? sub.category_id
-                            : categories.find(c => (c._id || c.id)?.toString() === sub.category_id?.toString());
-                          return (
-                            <SelectItem key={subId} value={subId?.toString()}>
-                              {sub.name} {category && `(${category.icon} ${category.name})`}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {/* Subject Filter */}
+              <div>
+                <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                  <BookOpen className="h-3 w-3 text-indigo-500" /> Subject
+                </Label>
+                <Select value={selectedSubject || 'all'} onValueChange={setSelectedSubject}>
+                  <SelectTrigger className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
+                    <SelectValue placeholder="All Subjects" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                    <SelectItem value="all">All Subjects</SelectItem>
+                    {subjects.map(sub => {
+                      const subId = sub._id || sub.id;
+                      const category = sub.category_id && typeof sub.category_id === 'object'
+                        ? sub.category_id
+                        : categories.find(c => (c._id || c.id)?.toString() === sub.category_id?.toString());
+                      return (
+                        <SelectItem key={subId} value={subId?.toString()}>
+                          {sub.name} {category && `(${category.icon} ${category.name})`}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Bottom bar for topics */}
+            <div className="mt-6 pt-6 border-t border-gray-50 flex items-center justify-between">
+               <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    Live Filtering Active
+                  </span>
+               </div>
+               <div className="flex items-center gap-3 bg-gray-50/50 px-3 py-1.5 rounded-xl border border-gray-100">
+                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight whitespace-nowrap">Show</Label>
+                  <select 
+                    value={itemsPerPage.toString()} 
+                    onChange={(e) => setItemsPerPage(parseInt(e.target.value))}
+                    className="bg-transparent border-none text-[11px] font-bold text-indigo-600 focus:ring-0 cursor-pointer"
+                  >
+                    <option value="10">10 topics</option>
+                    <option value="25">25 topics</option>
+                    <option value="50">50 topics</option>
+                    <option value="100">100 topics</option>
+                  </select>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+            </div>
+          </CardContent>
+        </Card>
+
 
         {/* Topics Table */}
         <Card className="border border-border/70 rounded-xl sm:rounded-[1.5rem] shadow-lg">
@@ -622,7 +625,14 @@ const Topics = () => {
                   currentPage={currentPage}
                   totalPages={totalPages}
                   onPageChange={setCurrentPage}
+                  itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={(val) => {
+                    setItemsPerPage(val);
+                    setCurrentPage(1);
+                  }}
+                  totalItems={topics.length}
                 />
+
               </div>
             )}
           </CardContent>

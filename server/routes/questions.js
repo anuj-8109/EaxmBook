@@ -20,7 +20,9 @@ router.get('/', async (req, res) => {
       subject_ids,
       topic_ids,
       exam_names,
+      language, // 'english', 'hindi', 'bilingual'
       page = 1,
+
       limit = 50
     } = req.query;
     
@@ -60,9 +62,21 @@ router.get('/', async (req, res) => {
       ];
     }
     if (exam_names) {
-      const names = Array.isArray(exam_names) ? exam_names : [exam_names];
       query.exam_names = { $in: names };
     }
+    
+    // Language filter
+    if (language) {
+      if (language === 'english') {
+        query.question_text = { $exists: true, $ne: '' };
+      } else if (language === 'hindi') {
+        query.question_text_hindi = { $exists: true, $ne: '' };
+      } else if (language === 'bilingual') {
+        query.question_text = { $exists: true, $ne: '' };
+        query.question_text_hindi = { $exists: true, $ne: '' };
+      }
+    }
+
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const questions = await Question.find(query)
@@ -354,131 +368,86 @@ router.post('/bulk', requireAdmin, async (req, res) => {
 // Update question (admin only)
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
-    const {
-      question_text,
-      question_text_hindi,
-      option_a, option_a_hindi,
-      option_b, option_b_hindi,
-      option_c, option_c_hindi,
-      option_d, option_d_hindi,
-      option_x, option_x_hindi,
-      answer_type,
-      correct_answer,
-      correct_answers,
-      hint, hint_hindi,
-      explanation,
-      explanation_hindi,
-      image_url,
-      difficulty,
-      difficulty_level,
-      category_id,
-      subject_id,
-      topic_id,
-      category_ids,
-      subject_ids,
-      topic_ids,
-      exam_names,
-      time_duration,
-      question_reference,
-    } = req.body;
-
-    // Helper function to check if a string is not empty
-    const isNotEmpty = (str) => str && typeof str === 'string' && str.trim().length > 0;
-
-    // For schema compatibility: if English is empty but Hindi is provided, use Hindi for required fields
-    const finalQuestionText = isNotEmpty(question_text) ? question_text : 
-                             (isNotEmpty(question_text_hindi) ? question_text_hindi : '');
-    const finalOptionA = isNotEmpty(option_a) ? option_a : 
-                        (isNotEmpty(option_a_hindi) ? option_a_hindi : '');
-    const finalOptionB = isNotEmpty(option_b) ? option_b : 
-                        (isNotEmpty(option_b_hindi) ? option_b_hindi : '');
-    const finalOptionC = isNotEmpty(option_c) ? option_c : 
-                        (isNotEmpty(option_c_hindi) ? option_c_hindi : '');
-    const finalOptionD = isNotEmpty(option_d) ? option_d : 
-                        (isNotEmpty(option_d_hindi) ? option_d_hindi : '');
-
-    // Handle answer_type logic
-    const finalAnswerType = answer_type || 'single';
-    
-    // Ensure numeric fields are properly converted
-    const finalDifficultyLevel = difficulty_level !== undefined ? parseInt(difficulty_level, 10) : 5;
-    const finalTimeDuration = time_duration !== undefined && time_duration !== null ? parseInt(time_duration, 10) : null;
-    const finalCorrectAnswer = correct_answer !== undefined && correct_answer !== null ? parseInt(correct_answer, 10) : null;
-    const finalCorrectAnswers = correct_answers ? correct_answers.map(a => parseInt(a, 10)) : [];
-    
-    const updateData = {
-      question_text: finalQuestionText,
-      question_text_hindi,
-      option_a: finalOptionA,
-      option_a_hindi,
-      option_b: finalOptionB,
-      option_b_hindi,
-      option_c: finalOptionC,
-      option_c_hindi,
-      option_d: finalOptionD,
-      option_d_hindi,
-      option_x,
-      option_x_hindi,
-      answer_type: finalAnswerType,
-      hint,
-      hint_hindi,
-      explanation,
-      explanation_hindi,
-      image_url,
-      difficulty,
-      difficulty_level: finalDifficultyLevel,
-      category_id,
-      subject_id,
-      topic_id,
-      category_ids,
-      subject_ids,
-      topic_ids,
-      exam_names,
-      time_duration: finalTimeDuration,
-      question_reference,
-      updated_at: Date.now(),
-    };
-
-    // Handle correct_answer and correct_answers based on answer_type
-    if (finalAnswerType === 'single') {
-      updateData.correct_answer = finalCorrectAnswer;
-      updateData.correct_answers = [];
-    } else if (finalAnswerType === 'multiple') {
-      updateData.correct_answer = null;
-      updateData.correct_answers = finalCorrectAnswers;
-    } else {
-      // 'none' type
-      updateData.correct_answer = null;
-      updateData.correct_answers = [];
-    }
-
-    // Fetch the question first to properly handle validation
     const question = await Question.findById(req.params.id);
 
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
     }
 
-    // Update all fields
-    Object.assign(question, updateData);
+    const updateFields = [
+      'question_text', 'question_text_hindi',
+      'option_a', 'option_a_hindi',
+      'option_b', 'option_b_hindi',
+      'option_c', 'option_c_hindi',
+      'option_d', 'option_d_hindi',
+      'option_x', 'option_x_hindi',
+      'answer_type', 'correct_answer', 'correct_answers',
+      'hint', 'hint_hindi',
+      'explanation', 'explanation_hindi',
+      'image_url', 'difficulty', 'difficulty_level',
+      'category_id', 'subject_id', 'topic_id',
+      'category_ids', 'subject_ids', 'topic_ids',
+      'exam_names', 'time_duration', 'question_reference',
+      'question_image_url', 'question_video_url',
+      'option_a_image_url', 'option_b_image_url',
+      'option_c_image_url', 'option_d_image_url',
+      'option_x_image_url', 'hint_image_url', 'explanation_image_url'
+    ];
 
-    // Save with validation (this properly handles 'this' context in schema validators)
+    // Helper function to check if a value is provided (not undefined)
+    const isProvided = (val) => val !== undefined;
+
+    // Update only provided fields
+    updateFields.forEach(field => {
+      if (isProvided(req.body[field])) {
+        // Handle numeric conversions for specific fields
+        if (['difficulty_level', 'time_duration', 'correct_answer'].includes(field) && req.body[field] !== null) {
+          question[field] = parseInt(req.body[field], 10);
+        } else if (field === 'correct_answers' && Array.isArray(req.body[field])) {
+          question[field] = req.body[field].map(a => parseInt(a, 10));
+        } else {
+          question[field] = req.body[field];
+        }
+      }
+    });
+
+    // Special logic for answer_type consistency
+    if (isProvided(req.body.answer_type)) {
+      if (req.body.answer_type === 'single') {
+        if (isProvided(req.body.correct_answer)) {
+          question.correct_answer = parseInt(req.body.correct_answer, 10);
+        }
+        question.correct_answers = [];
+      } else if (req.body.answer_type === 'multiple') {
+        question.correct_answer = null;
+        if (isProvided(req.body.correct_answers)) {
+          question.correct_answers = req.body.correct_answers.map(a => parseInt(a, 10));
+        }
+      } else if (req.body.answer_type === 'none') {
+        question.correct_answer = null;
+        question.correct_answers = [];
+      }
+    }
+
+    question.updated_at = Date.now();
+
+    // Save with validation
     await question.save();
 
     await question.populate('category_id');
     await question.populate('subject_id');
+    await question.populate('topic_id');
+    await question.populate('category_ids');
+    await question.populate('subject_ids');
+    await question.populate('topic_ids');
+    
     res.json(question);
   } catch (error) {
     console.error('Update question error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      errors: error.errors,
-      body: req.body,
-      updateData: updateData
-    });
     res.status(500).json({ error: 'Failed to update question', details: error.message });
   }
 });
+
 
 // Batch delete questions (admin only) - MUST be before /:id route
 router.delete('/batch', requireAdmin, async (req, res) => {

@@ -6,13 +6,14 @@ const getIsLocalhost = () => {
   return hostname === 'localhost' || hostname === '127.0.0.1';
 };
 
+console.log("window.location.hostname--------------", window.location.hostname)
 const isLocalhost = getIsLocalhost();
 
+console.log("isLocalhost--------------", isLocalhost)
 // Priority: 1. Env variable, 2. Auto-detect local, 3. Default live URL
-const rawApiUrl = import.meta.env.VITE_API_URL || 
-  (isLocalhost ? "http://localhost:3001" : "https://eaxmbook-1.onrender.com");
+const rawApiUrl = isLocalhost ? "http://localhost:3001" : "https://eaxmbook-1.onrender.com"
 
-export const VITE_API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl.slice(0, -4) : rawApiUrl;
+export const VITE_API_URL = rawApiUrl;
 export const API_BASE_URL = `${VITE_API_URL}/api`;
 
 console.log('🌐 API Base URL:', API_BASE_URL);

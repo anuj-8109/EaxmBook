@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Clock, FileText, X, Link, Search, Filter, AlertCircle, CheckCircle2, DollarSign, BookOpen, Award, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Plus, Pencil, Trash2, Clock, FileText, X, Link, Search, Filter, AlertCircle, CheckCircle2, DollarSign, BookOpen, Award, ChevronLeft, ChevronRight, Calendar, FolderTree, RotateCcw } from 'lucide-react';
+
 import { useNavigate } from 'react-router-dom';
 import { showError, showSuccess, showWarning, showInfo, showDeleteConfirm } from '@/lib/sweetalert';
 import { categoriesAPI, testsAPI, subjectsAPI, aiAPI } from '@/lib/api';
@@ -981,141 +982,141 @@ const Tests = () => {
                </DialogContent>
             </Dialog>
 
-            {/* Filters Section - Collapsible */}
-            <div className="relative">
-               {/* Side Filter Toggle Button */}
-               <Button
-                  variant="outline"
-                  size="sm"
-                  className={`absolute right-0 top-0 z-10 rounded-l-xl rounded-r-none border-r-0 ${showFilters ? 'rounded-bl-none' : ''
-                     }`}
-                  onClick={() => setShowFilters(!showFilters)}
-               >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                  {hasActiveFilters && (
-                     <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-                        {[searchQuery, selectedCategory !== 'all', selectedSubject !== 'all', negativeMarkingFilter !== 'all', paidFilter !== 'all'].filter(Boolean).length}
-                     </span>
-                  )}
-                  {showFilters ? (
-                     <ChevronRight className="h-4 w-4 ml-2" />
-                  ) : (
-                     <ChevronLeft className="h-4 w-4 ml-2" />
-                  )}
-               </Button>
-
-               {/* Filter Card */}
-               {showFilters && (
-                  <Card className="border border-border/70 rounded-xl rounded-tr-none">
-                     <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between pr-24">
-                           <div className="flex items-center gap-2">
-                              <Filter className="h-4 w-4" />
-                              <CardTitle className="text-base">Filters</CardTitle>
-                           </div>
-                           {hasActiveFilters && (
-                              <Button
-                                 variant="ghost"
-                                 size="sm"
-                                 onClick={clearFilters}
-                                 className="h-8 text-xs"
-                              >
-                                 <X className="h-3 w-3 mr-1" />
-                                 Clear All
-                              </Button>
-                           )}
+            {/* Modernized Filters Section */}
+            <Card className="rounded-2xl border border-gray-100 shadow-sm bg-white overflow-hidden transition-all hover:shadow-md mb-6">
+               <div className="bg-gray-50/50 border-b border-gray-100 px-5 py-3 flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                     <Filter className="h-3.5 w-3.5" />
+                     Filter Tests
+                  </h3>
+                  <div className="flex items-center gap-2">
+                     <Button 
+                        variant="ghost" 
+                        size="xs" 
+                        className="h-7 px-2 text-[10px] font-bold text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        onClick={clearFilters}
+                     >
+                        <RotateCcw className="h-3 w-3 mr-1" />
+                        Reset All
+                     </Button>
+                  </div>
+               </div>
+               <CardContent className="p-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                     {/* Search Field */}
+                     <div className="lg:col-span-1">
+                        <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                           <Search className="h-3 w-3 text-indigo-500" /> Search Tests
+                        </Label>
+                        <div className="relative group">
+                           <Input
+                              placeholder="Search by test name..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 pl-9 focus:bg-white transition-all group-hover:border-indigo-200"
+                           />
+                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                         </div>
-                     </CardHeader>
-                     <CardContent className="pt-0 space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                           {/* Search */}
-                           <div className="space-y-2">
-                              <Label>Search Tests</Label>
-                              <div className="relative">
-                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                 <Input
-                                    placeholder="Search by name..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 rounded-xl"
-                                 />
-                              </div>
-                           </div>
+                     </div>
 
-                           {/* Category Filter */}
-                           <div className="space-y-2">
-                              <Label>Exam Name</Label>
-                              <Select value={selectedCategory || 'all'} onValueChange={(val) => {
-                                 setSelectedCategory(val);
-                                 setSelectedSubject('all');
-                              }}>
-                                 <SelectTrigger className="rounded-xl">
-                                    <SelectValue placeholder="All Exam Names" />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                    <SelectItem value="all">All Exam Names</SelectItem>
-                                    {Array.isArray(categories) && categories.map(cat => (
-                                       <SelectItem key={cat._id || cat.id} value={(cat._id || cat.id)?.toString()}>
-                                          {cat.icon} {cat.name}
-                                       </SelectItem>
-                                    ))}
-                                 </SelectContent>
-                              </Select>
-                           </div>
+                     {/* Exam Name Filter */}
+                     <div>
+                        <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                           <FolderTree className="h-3 w-3 text-indigo-500" /> Exam Name
+                        </Label>
+                        <Select value={selectedCategory || 'all'} onValueChange={(val) => {
+                           setSelectedCategory(val);
+                           setSelectedSubject('all');
+                        }}>
+                           <SelectTrigger className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
+                              <SelectValue placeholder="All Exam Names" />
+                           </SelectTrigger>
+                           <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                              <SelectItem value="all">All Exam Names</SelectItem>
+                              {Array.isArray(categories) && categories.map(cat => (
+                                 <SelectItem key={cat._id || cat.id} value={(cat._id || cat.id)?.toString()}>
+                                    {cat.icon} {cat.name}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     </div>
 
-                           {/* Subject Filter */}
-                           <div className="space-y-2">
-                              <Label>Subject</Label>
-                              <Select value={selectedSubject || 'all'} onValueChange={setSelectedSubject}>
-                                 <SelectTrigger className="rounded-xl">
-                                    <SelectValue placeholder="All Subjects" />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                    <SelectItem value="all">All Subjects</SelectItem>
-                                    {filteredSubjects.map(sub => (
-                                       <SelectItem key={sub._id || sub.id} value={(sub._id || sub.id)?.toString()}>
-                                          {sub.name}
-                                       </SelectItem>
-                                    ))}
-                                 </SelectContent>
-                              </Select>
-                           </div>
+                     {/* Subject Filter */}
+                     <div>
+                        <Label className="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5 ml-1">
+                           <BookOpen className="h-3 w-3 text-indigo-500" /> Subject
+                        </Label>
+                        <Select value={selectedSubject || 'all'} onValueChange={setSelectedSubject}>
+                           <SelectTrigger className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
+                              <SelectValue placeholder="All Subjects" />
+                           </SelectTrigger>
+                           <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                              <SelectItem value="all">All Subjects</SelectItem>
+                              {filteredSubjects.map(sub => (
+                                 <SelectItem key={sub._id || sub.id} value={(sub._id || sub.id)?.toString()}>
+                                    {sub.name}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     </div>
 
-                           {/* Negative Marking Filter */}
-                           <div className="space-y-2">
-                              <Label>Negative Marking</Label>
-                              <Select value={negativeMarkingFilter} onValueChange={setNegativeMarkingFilter}>
-                                 <SelectTrigger className="rounded-xl">
-                                    <SelectValue />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                    <SelectItem value="all">All</SelectItem>
-                                    <SelectItem value="yes">With Negative Marking</SelectItem>
-                                    <SelectItem value="no">Without Negative Marking</SelectItem>
-                                 </SelectContent>
-                              </Select>
-                           </div>
-
-                           {/* Paid/Free Filter */}
-                           <div className="space-y-2">
-                              <Label>Test Type</Label>
-                              <Select value={paidFilter} onValueChange={setPaidFilter}>
-                                 <SelectTrigger className="rounded-xl">
-                                    <SelectValue />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                    <SelectItem value="all">All</SelectItem>
-                                    <SelectItem value="free">Free Tests</SelectItem>
-                                    <SelectItem value="paid">Paid Tests</SelectItem>
-                                 </SelectContent>
-                              </Select>
-                           </div>
+                     {/* Test Status/Type Filter */}
+                     <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                           <Label className="text-[11px] font-bold text-slate-500 flex items-center gap-1 ml-1">Type</Label>
+                           <Select value={paidFilter} onValueChange={setPaidFilter}>
+                              <SelectTrigger className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
+                                 <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                                 <SelectItem value="all">All Types</SelectItem>
+                                 <SelectItem value="free">Free</SelectItem>
+                                 <SelectItem value="paid">Paid</SelectItem>
+                              </SelectContent>
+                           </Select>
                         </div>
-                     </CardContent>
-                  </Card>
-               )}
-            </div>
+                        <div className="space-y-2">
+                           <Label className="text-[11px] font-bold text-slate-500 flex items-center gap-1 ml-1">Negative</Label>
+                           <Select value={negativeMarkingFilter} onValueChange={setNegativeMarkingFilter}>
+                              <SelectTrigger className="h-10 text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
+                                 <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                                 <SelectItem value="all">All</SelectItem>
+                                 <SelectItem value="yes">Yes</SelectItem>
+                                 <SelectItem value="no">No</SelectItem>
+                              </SelectContent>
+                           </Select>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Density/Pagination Quick Control */}
+                  <div className="mt-6 pt-6 border-t border-gray-50 flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                           Live Filtering Active
+                        </span>
+                     </div>
+                     <div className="flex items-center gap-3 bg-gray-50/50 px-3 py-1.5 rounded-xl border border-gray-100">
+                        <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight whitespace-nowrap">Show</Label>
+                        <select 
+                           value={itemsPerPage.toString()} 
+                           onChange={(e) => setItemsPerPage(parseInt(e.target.value))}
+                           className="bg-transparent border-none text-[11px] font-bold text-indigo-600 focus:ring-0 cursor-pointer"
+                        >
+                           <option value="10">10 tests</option>
+                           <option value="20">20 tests</option>
+                           <option value="50">50 tests</option>
+                           <option value="100">100 tests</option>
+                        </select>
+                     </div>
+                  </div>
+               </CardContent>
+            </Card>
 
             {/* Tests Count */}
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1391,8 +1392,15 @@ const Tests = () => {
                      currentPage={currentPage}
                      totalPages={totalPages}
                      onPageChange={(page) => setCurrentPage(page)}
+                     itemsPerPage={itemsPerPage}
+                     onItemsPerPageChange={(val) => {
+                        setItemsPerPage(val);
+                        setCurrentPage(1);
+                     }}
+                     totalItems={totalTests}
                      className="flex-wrap gap-4"
                   />
+
                </div>
             )}
          </div>

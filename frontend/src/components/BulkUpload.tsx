@@ -20,8 +20,11 @@ export const BulkUpload = ({ onUpload, onCancel }: BulkUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const downloadDummyTemplateCSV = () => {
-    let csvContent = `difficulty_level,question_text,question_text_hindi,option_a,option_a_hindi,option_b,option_b_hindi,option_c,option_c_hindi,option_d,option_d_hindi,correct_answer,explanation,explanation_hindi,hint,hint_hindi,question_reference,exam_names,time_duration\n5,What is the capital of India?,भारत की राजधानी क्या है?,Delhi,दिल्ली,Mumbai,मुंबई,Kolkata,कोलकाता,Chennai,चेन्नई,0,Delhi is the capital of India,दिल्ली भारत की राजधानी है,Think about the administrative center,प्रशासनिक केंद्र के बारे में सोचें,REF001,SSC|Railway,60`;
+    let headers = 'question_text,question_text_hindi,option_a,option_a_hindi,option_b,option_b_hindi,option_c,option_c_hindi,option_d,option_d_hindi,correct_answer,answer_type,difficulty_level,time_duration,question_reference,exam_names,hint,hint_hindi,explanation,explanation_hindi';
+    let row = '"What is the capital of France?","फ्रांस की राजधानी क्या है?","Paris","पेरिस","London","लंदन","Berlin","बर्लिन","Madrid","मैड्रिड","0","single","5","60","REF001","SSC|Railway","It starts with P","यह P से शुरू होता है","Paris is the capital of France","पेरिस फ्रांस की राजधानी है"';
+    let csvContent = `${headers}\n${row}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);

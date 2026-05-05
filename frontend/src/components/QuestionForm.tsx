@@ -15,6 +15,9 @@ import 'mathlive';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import CKEditorInput from './CKEditorInput';
+import { Type } from 'lucide-react';
+
 // Declare math-field for TypeScript
 declare global {
   namespace JSX {
@@ -26,22 +29,26 @@ declare global {
   }
 }
 
+
 /* ── Math Input Component ── */
 const MathInput = ({
   value,
   onChange,
   placeholder,
   className = "",
-  compact = false
+  compact = false,
+  defaultShowRichText = false
 }: {
   value: string;
   onChange: (val: string) => void;
   placeholder?: string;
   className?: string;
   compact?: boolean;
+  defaultShowRichText?: boolean;
 }) => {
   const [showPreview, setShowPreview] = useState(false);
   const [showMathEditor, setShowMathEditor] = useState(false);
+  const [showCKEditor, setShowCKEditor] = useState(defaultShowRichText);
   const [showTableModal, setShowTableModal] = useState(false);
   const [tableRows, setTableRows] = useState(2);
   const [tableCols, setTableCols] = useState(2);
@@ -87,14 +94,33 @@ const MathInput = ({
   return (
     <div className={`space-y-2 ${className}`}>
       <div className="relative">
-        <div className="flex gap-1 mb-1">
+        <div className="flex flex-wrap gap-1 mb-1">
+          <Button
+            type="button"
+            variant={showCKEditor ? "default" : "outline"}
+            size="xs"
+            onClick={() => {
+              setShowCKEditor(!showCKEditor);
+              if (!showCKEditor) {
+                setShowMathEditor(false);
+                setShowPreview(false);
+              }
+            }}
+            className="h-7 text-[10px] rounded-lg px-2 bg-indigo-500 hover:bg-indigo-600 text-white border-none"
+          >
+            <Type className="w-3 h-3 mr-1" />
+            Rich Text (CK)
+          </Button>
           <Button
             type="button"
             variant={showMathEditor ? "default" : "outline"}
             size="xs"
             onClick={() => {
               setShowMathEditor(!showMathEditor);
-              if (!showMathEditor) setShowPreview(false);
+              if (!showMathEditor) {
+                setShowPreview(false);
+                setShowCKEditor(false);
+              }
             }}
             className="h-7 text-[10px] rounded-lg px-2"
           >
@@ -117,7 +143,10 @@ const MathInput = ({
             size="xs"
             onClick={() => {
               setShowPreview(!showPreview);
-              if (!showPreview) setShowMathEditor(false);
+              if (!showPreview) {
+                setShowMathEditor(false);
+                setShowCKEditor(false);
+              }
             }}
             className="h-7 text-[10px] rounded-lg px-2"
           >
@@ -242,6 +271,12 @@ const MathInput = ({
               Visual Editor: Type formulas naturally or use the virtual keyboard.
             </p>
           </div>
+        ) : showCKEditor ? (
+          <CKEditorInput
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+          />
         ) : (
           <>
             {compact ? (
@@ -262,6 +297,7 @@ const MathInput = ({
           </>
         )}
       </div>
+
 
       {showPreview && value && (
         <div className="p-4 rounded-2xl border border-primary/20 bg-primary/5 dark:bg-primary/10 animate-in fade-in slide-in-from-top-1">
@@ -946,6 +982,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
               <div className="space-y-2">
                 <Label htmlFor="question_text">English (Optional)</Label>
                 <MathInput
+                  defaultShowRichText
                   value={formData.question_text}
                   onChange={(val) => setFormData(prev => ({ ...prev, question_text: val }))}
                   placeholder="Enter question in English (optional). Use $...$ for math."
@@ -956,6 +993,7 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                 <div className="space-y-2">
                   <Label htmlFor="question_text_hindi">Hindi (Optional)</Label>
                   <MathInput
+                    defaultShowRichText
                     value={formData.question_text_hindi}
                     onChange={(val) => setFormData(prev => ({ ...prev, question_text_hindi: val }))}
                     placeholder="Enter question in Hindi (optional). Use $...$ for math."

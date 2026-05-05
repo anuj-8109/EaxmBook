@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   optimizeDeps: {
-    include: ["mathlive", "react-mathlive"],
+    include: ["mathlive", "react-mathlive", "@ckeditor/ckeditor5-react", "@ckeditor/ckeditor5-build-classic"],
   },
+
 }));
