@@ -599,6 +599,177 @@ const Questions = () => {
     return questions;
   };
 
+  // Parse DOCX file for bulk upload fallback
+  const parseDocxFallback = async (arrayBuffer: ArrayBuffer): Promise<any[]> => {
+    const questions: any[] = [];
+
+    try {
+      // Try HTML conversion for table parsing
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      const html = result.value;
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const tables = doc.querySelectorAll('table');
+
+      let questionsTable: HTMLTableElement | null = null;
+
+      // Find the questions table
+      for (let i = 0; i < tables.length; i++) {
+        const table = tables[i];
+        const firstRow = table.querySelector('tr');
+        if (firstRow) {
+          const text = firstRow.textContent?.toLowerCase() || '';
+          if (text.includes('question') || text.includes('difficulty') ||
+              text.includes('option') || text.includes('answer')) {
+            questionsTable = table;
+            break;
+          }
+        }
+      }
+
+      // Use largest table if no specific table found
+      if (!questionsTable && tables.length > 0) {
+        let maxRows = 0;
+        for (const table of Array.from(tables)) {
+          const rowCount = table.querySelectorAll('tr').length;
+          if (rowCount > maxRows) {
+            maxRows = rowCount;
+            questionsTable = table;
+          }
+        }
+      }
+
+      // Parse table
+      if (questionsTable) {
+        const rows = Array.from(questionsTable.querySelectorAll('tr'));
+        if (rows.length >= 2) {
+          const headerCells = Array.from(rows[0].querySelectorAll('td, th'));
+          const headers = headerCells.map(th => {
+            let text = th.textContent?.trim().toLowerCase() || '';
+            if (text.includes('difficulty')) return 'difficulty_level';
+            if (text.includes('question text hindi')) return 'question_text_hindi';
+            if (text === 'question' || text.includes('question')) return 'question_text';
+            if (text.includes('option a')) return 'option_a';
+            if (text.includes('option b')) return 'option_b';
+            if (text.includes('option c')) return 'option_c';
+            if (text.includes('option d')) return 'option_d';
+            if (text.includes('answer')) return 'correct_answer';
+            if (text.includes('explanation')) return 'explanation';
+            if (text.includes('hint')) return 'hint';
+            return text.replace(/\s+/g, '_');
+          });
+
+          for (let i = 1; i < rows.length; i++) {
+            const cells = Array.from(rows[i].querySelectorAll('td, th'));
+            if (cells.length < 3) continue;
+
+            const question: any = { difficulty_level: 5, correct_answer: 0 };
+
+            headers.forEach((header, index) => {
+              const value = cells[index]?.textContent?.trim() || '';
+              if (!value) return;
+
+              if (header === 'difficulty_level') {
+                const parsed = parseInt(value);
+                question.difficulty_level = !isNaN(parsed) && parsed >= 1 && parsed <= 10 ? parsed : 5;
+              } else if (header === 'correct_answer') {
+                const strVal = value.toUpperCase().trim();
+                if (strVal.startsWith('A') || strVal === '0') question.correct_answer = 0;
+                else if (strVal.startsWith('B') || strVal === '1') question.correct_answer = 1;
+                else if (strVal.startsWith('C') || strVal === '2') question.correct_answer = 2;
+                else if (strVal.startsWith('D') || strVal === '3') question.correct_answer = 3;
+                else {
+                  const match = strVal.match(/\d/);
+                  if (match) {
+                    const num = parseInt(match[0]);
+                    if (num >= 0 && num <= 4) question.correct_answer = num;
+                  }
+                }
+              } else {
+                question[header] = value;
+              }
+            });
+
+            if (question.question_text && question.option_a && question.option_b) {
+              if (!question.option_c) question.option_c = 'None';
+              if (!question.option_d) question.option_d = 'None';
+              if (question.correct_answer >= 0 && question.correct_answer <= 4) {
+                questions.push(question);
+              }
+            }
+          }
+        }
+      }
+
+      // Fallback: Parse as raw text
+      if (questions.length === 0) {
+        const textResult = await mammoth.extractRawText({ arrayBuffer });
+        const text = textResult.value;
+        const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+
+        let currentQuestion: any = null;
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const lowerLine = line.toLowerCase();
+
+          // Match question patterns
+          const qMatch = line.match(/^(?:q(?:uestion)?\s*\d*[\.\:\-\)]\s*|\d+[\.\:\)\-\]]\s*)(.+)/i);
+          const qWordMatch = line.match(/^question[\s\d\.\:\-]+(.+)/i);
+
+          if (qMatch || qWordMatch) {
+            if (currentQuestion && currentQuestion.question_text && currentQuestion.option_a) {
+              if (!currentQuestion.option_c) currentQuestion.option_c = 'None';
+              if (!currentQuestion.option_d) currentQuestion.option_d = 'None';
+              questions.push({ ...currentQuestion });
+            }
+
+            const questionText = (qMatch?.[1] || qWordMatch?.[1] || line).trim();
+            currentQuestion = {
+              difficulty_level: 5,
+              question_text: questionText,
+              correct_answer: 0
+            };
+            continue;
+          }
+
+          if (!currentQuestion) continue;
+
+          // Match options
+          const optionAMatch = line.match(/^(?:a|option\s*a)[\.\)\-\:]\s*(.+)/i);
+          const optionBMatch = line.match(/^(?:b|option\s*b)[\.\)\-\:]\s*(.+)/i);
+          const optionCMatch = line.match(/^(?:c|option\s*c)[\.\)\-\:]\s*(.+)/i);
+          const optionDMatch = line.match(/^(?:d|option\s*d)[\.\)\-\:]\s*(.+)/i);
+
+          if (optionAMatch) currentQuestion.option_a = optionAMatch[1].trim();
+          else if (optionBMatch) currentQuestion.option_b = optionBMatch[1].trim();
+          else if (optionCMatch) currentQuestion.option_c = optionCMatch[1].trim();
+          else if (optionDMatch) currentQuestion.option_d = optionDMatch[1].trim();
+          else if (lowerLine.match(/^(?:ans(?:wer)?|correct)/)) {
+            const ansStr = line.replace(/^(?:ans(?:wer)?|correct)[\s\:\-\=]+/i, '').trim().toUpperCase();
+            if (ansStr.startsWith('A')) currentQuestion.correct_answer = 0;
+            else if (ansStr.startsWith('B')) currentQuestion.correct_answer = 1;
+            else if (ansStr.startsWith('C')) currentQuestion.correct_answer = 2;
+            else if (ansStr.startsWith('D')) currentQuestion.correct_answer = 3;
+          } else if (!currentQuestion.option_a) {
+            currentQuestion.question_text += ' ' + line;
+          }
+        }
+
+        if (currentQuestion && currentQuestion.question_text && currentQuestion.option_a) {
+          if (!currentQuestion.option_c) currentQuestion.option_c = 'None';
+          if (!currentQuestion.option_d) currentQuestion.option_d = 'None';
+          questions.push({ ...currentQuestion });
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing DOCX fallback:', error);
+    }
+
+    return questions;
+  };
+
   const handleBulkUpload = async (file: File, format: 'csv' | 'docx', parsedQuestions?: any[]) => {
     setLoading(true);
     try {

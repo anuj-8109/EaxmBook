@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Trash2, Eye } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertTriangle, Trash2, Eye, Trash } from 'lucide-react';
 import { questionsAPI } from '@/lib/api';
 import { toast } from 'sonner';
+import { showDeleteConfirm } from '@/lib/sweetalert';
 
 interface Question {
   _id?: string;
@@ -22,6 +24,7 @@ interface DuplicateGroup {
 export const DuplicateDetector = () => {
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedDuplicates, setSelectedDuplicates] = useState<Set<string>>(new Set());
 
   const calculateSimilarity = (text1: string, text2: string): number => {
     if (!text1 || !text2) return 0;
@@ -191,14 +194,82 @@ export const DuplicateDetector = () => {
   };
 
   const handleDelete = async (questionId: string) => {
-    if (!confirm('Are you sure you want to delete this question?')) return;
+    const confirmed = await showDeleteConfirm('question');
+    if (!confirmed) return;
     
     try {
       await questionsAPI.delete(questionId);
       toast.success('Question deleted');
+      // Remove from selection
+      setSelectedDuplicates(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(questionId);
+        return newSet;
+      });
       findDuplicates(); // Refresh
     } catch (error: any) {
       toast.error('Failed to delete: ' + error.message);
+    }
+  };
+
+  const handleSelectDuplicate = (questionId: string) => {
+    setSelectedDuplicates(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(questionId)) {
+        newSet.delete(questionId);
+      } else {
+        newSet.add(questionId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllInGroup = (group: DuplicateGroup, checked: boolean) => {
+    setSelectedDuplicates(prev => {
+      const newSet = new Set(prev);
+      group.questions.forEach(q => {
+        const id = (q._id || q.id) as string;
+        if (checked) {
+          newSet.add(id);
+        } else {
+          newSet.delete(id);
+        }
+      });
+      return newSet;
+    });
+  };
+
+  const isGroupSelected = (group: DuplicateGroup): boolean => {
+    return group.questions.every(q => {
+      const id = (q._id || q.id) as string;
+      return selectedDuplicates.has(id);
+    });
+  };
+
+  const getSelectedCountInGroup = (group: DuplicateGroup): number => {
+    return group.questions.filter(q => {
+      const id = (q._id || q.id) as string;
+      return selectedDuplicates.has(id);
+    }).length;
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedDuplicates.size === 0) {
+      toast.error('Please select at least one question to delete');
+      return;
+    }
+
+    const confirmed = await showDeleteConfirm(`${selectedDuplicates.size} selected questions`);
+    if (!confirmed) return;
+
+    try {
+      const ids = Array.from(selectedDuplicates);
+      await questionsAPI.batchDelete(ids);
+      toast.success(`${ids.length} questions deleted successfully`);
+      setSelectedDuplicates(new Set());
+      findDuplicates(); // Refresh
+    } catch (error: any) {
+      toast.error('Failed to delete questions: ' + error.message);
     }
   };
 
@@ -210,14 +281,28 @@ export const DuplicateDetector = () => {
             <CardTitle className="text-sm font-semibold">Duplicate Question Detection</CardTitle>
             <p className="text-xs text-muted-foreground">Find questions with 90% or higher similarity</p>
           </div>
-          <Button
-            onClick={findDuplicates}
-            disabled={loading}
-            variant="outline"
-            className="rounded-2xl text-xs"
-          >
-            {loading ? 'Scanning...' : 'Scan for Duplicates'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedDuplicates.size > 0 && (
+              <Button
+                onClick={handleBatchDelete}
+                disabled={loading}
+                variant="destructive"
+                size="sm"
+                className="rounded-2xl text-xs"
+              >
+                <Trash className="h-3 w-3 mr-1" />
+                Delete ({selectedDuplicates.size})
+              </Button>
+            )}
+            <Button
+              onClick={findDuplicates}
+              disabled={loading}
+              variant="outline"
+              className="rounded-2xl text-xs"
+            >
+              {loading ? 'Scanning...' : 'Scan for Duplicates'}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-4">
@@ -232,59 +317,84 @@ export const DuplicateDetector = () => {
                 key={idx}
                 className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-3"
               >
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
-                  <span className="font-semibold text-sm">
-                    Duplicate Group {idx + 1} ({group.questions.length} questions)
-                  </span>
-                  <Badge variant="destructive" className="rounded-full">
-                    {group.similarity}% similar
-                  </Badge>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={isGroupSelected(group)}
+                      onCheckedChange={(checked) => handleSelectAllInGroup(group, checked as boolean)}
+                      aria-label={`Select all in group ${idx + 1}`}
+                    />
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <span className="font-semibold text-sm">
+                      Duplicate Group {idx + 1} ({group.questions.length} questions)
+                    </span>
+                    <Badge variant="destructive" className="rounded-full">
+                      {group.similarity}% similar
+                    </Badge>
+                  </div>
+                  {getSelectedCountInGroup(group) > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {getSelectedCountInGroup(group)} selected
+                    </span>
+                  )}
                 </div>
                 <div className="space-y-2">
-                  {group.questions.map((q) => (
-                    <div
-                      key={q._id || q.id}
-                      className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-background p-3"
-                    >
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{q.question_text}</p>
-                        <div className="flex gap-2 mt-2">
-                          {q.exam_names && q.exam_names.length > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              {q.exam_names.join(', ')}
-                            </Badge>
-                          )}
-                          {q.difficulty_level && (
-                            <Badge variant="outline" className="text-xs">
-                              Level {q.difficulty_level}
-                            </Badge>
-                          )}
+                  {group.questions.map((q) => {
+                    const qId = (q._id || q.id) as string;
+                    const isSelected = selectedDuplicates.has(qId);
+                    return (
+                      <div
+                        key={qId}
+                        className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
+                          isSelected ? 'border-red-300 bg-red-50/30' : 'border-border/60 bg-background'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 flex-1">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleSelectDuplicate(qId)}
+                            aria-label={`Select question ${qId}`}
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{q.question_text}</p>
+                            <div className="flex gap-2 mt-2">
+                              {q.exam_names && q.exam_names.length > 0 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {q.exam_names.join(', ')}
+                                </Badge>
+                              )}
+                              {q.difficulty_level && (
+                                <Badge variant="outline" className="text-xs">
+                                  Level {q.difficulty_level}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl"
+                            onClick={() => {
+                              // TODO: Open view modal
+                              toast.info('View question feature coming soon');
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl text-destructive"
+                            onClick={() => handleDelete(qId)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-xl"
-                          onClick={() => {
-                            // TODO: Open view modal
-                            toast.info('View question feature coming soon');
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-xl text-destructive"
-                          onClick={() => handleDelete((q._id || q.id) as string)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
