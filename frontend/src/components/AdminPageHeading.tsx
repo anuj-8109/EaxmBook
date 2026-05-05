@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 interface AdminPageHeadingProps {
-  title: string;
+  title: ReactNode;
   description?: string;
   eyebrow?: string;
   action?: ReactNode;

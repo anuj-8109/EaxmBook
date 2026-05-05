@@ -9,10 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X, Trash, Download, Rocket, Tags } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Plus, Pencil, Trash2, Eye, Upload, Search, Filter, X, Trash, Download, Rocket, Tags, HelpCircle, FolderTree, BookOpen, Tag, RotateCcw, Check, ChevronsUpDown, CheckCircle2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { showError, showSuccess, showWarning, showInfo, showDeleteConfirm } from '@/lib/sweetalert';
-import { questionsAPI, tagsAPI, categoriesAPI } from '@/lib/api';
+import { questionsAPI, tagsAPI, categoriesAPI, subjectsAPI, topicsAPI } from '@/lib/api';
 import * as mammoth from 'mammoth';
 import { AdminPageHeading } from '@/components/AdminPageHeading';
 import { QuestionForm } from '@/components/QuestionForm';
@@ -76,12 +78,16 @@ const Questions = () => {
   const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
+  const [filterExamName, setFilterExamName] = useState('');
+  const [filterSubject, setFilterSubject] = useState('');
+  const [filterTopic, setFilterTopic] = useState('');
   const [activeTab, setActiveTab] = useState('list');
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [totalQuestionsCount, setTotalQuestionsCount] = useState(0);
   
   // Multi-select states
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
@@ -95,14 +101,26 @@ const Questions = () => {
   const [quickAddSource, setQuickAddSource] = useState('');
   const [quickAddTags, setQuickAddTags] = useState<string[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [topics, setTopics] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
 
   // Add Tags to Selected modal
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
   const [selectedTagsToAdd, setSelectedTagsToAdd] = useState<string[]>([]);
 
   // View Question modal enhanced
   const [viewingQuestionDetails, setViewingQuestionDetails] = useState<Question | null>(null);
+
+  // Quick Assign states
+  const [quickAssignTarget, setQuickAssignTarget] = useState<{question: Question, type: 'exam' | 'subject' | 'topic'} | null>(null);
+  const [assignSearchQuery, setAssignSearchQuery] = useState('');
+
+  // Search states for comboboxes
+  const [openExamSearch, setOpenExamSearch] = useState(false);
+  const [openSubjectSearch, setOpenSubjectSearch] = useState(false);
+  const [openTopicSearch, setOpenTopicSearch] = useState(false);
 
   // Memoize initialData to prevent unnecessary re-renders of QuestionForm
   const questionFormInitialData = useMemo(() => {
@@ -196,24 +214,35 @@ const Questions = () => {
   useEffect(() => {
     fetchQuestions();
     fetchCategoriesAndTags();
-  }, [currentPage]);
+  }, [currentPage, itemsPerPage]);
 
   const fetchCategoriesAndTags = async () => {
     try {
-      const [categoriesData, tagsData] = await Promise.all([
+      const [categoriesData, tagsData, subjectsData, topicsData] = await Promise.all([
         categoriesAPI.getAll(true),
-        tagsAPI.getAll()
+        tagsAPI.getAll(),
+        subjectsAPI.getAll(undefined, 1, 1000),
+        topicsAPI.getAll(undefined, 1, 1000)
       ]);
-      setCategories(categoriesData || []);
-      setTags(tagsData?.data || tagsData || []);
+      
+      // Normalize data structure
+      const normalizedCats = categoriesData?.categories || categoriesData?.data || categoriesData || [];
+      const normalizedTags = tagsData?.data || tagsData || [];
+      const normalizedSubs = subjectsData?.subjects || subjectsData?.data || subjectsData || [];
+      const normalizedTops = topicsData?.topics || topicsData?.data || topicsData || [];
+
+      setCategories(normalizedCats);
+      setTags(normalizedTags);
+      setSubjects(normalizedSubs);
+      setTopics(normalizedTops);
     } catch (error) {
-      console.error('Failed to load categories or tags:', error);
+      console.error('Failed to load filter data:', error);
     }
   };
 
   useEffect(() => {
     filterQuestions();
-  }, [questions, searchQuery, filterDifficulty]);
+  }, [questions, searchQuery, filterDifficulty, filterExamName, filterSubject, filterTopic]);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -224,14 +253,17 @@ const Questions = () => {
       if (data && Array.isArray(data)) {
         setQuestions(data);
         setTotalPages(1);
+        setTotalQuestionsCount(data.length);
       } else if (data && data.questions && Array.isArray(data.questions)) {
         setQuestions(data.questions);
         if (data.total) {
+          setTotalQuestionsCount(data.total);
           setTotalPages(Math.ceil(data.total / itemsPerPage) || 1);
         }
       } else {
         setQuestions([]);
         setTotalPages(1);
+        setTotalQuestionsCount(0);
       }
     } catch (error: any) {
       showError('Failed to load questions');
@@ -261,6 +293,26 @@ const Questions = () => {
     if (filterDifficulty !== 'all') {
       const level = parseInt(filterDifficulty);
       filtered = filtered.filter(q => q.difficulty_level === level);
+    }
+
+    if (filterExamName && filterExamName !== 'all') {
+      filtered = filtered.filter(q => 
+        q.exam_names?.some(name => name.toLowerCase().includes(filterExamName.toLowerCase()))
+      );
+    }
+
+    if (filterSubject && filterSubject !== 'all') {
+      filtered = filtered.filter(q => 
+        q.subject_ids?.some(s => (s.name || s.subject_name || s).toLowerCase().includes(filterSubject.toLowerCase())) ||
+        (q.subject_id?.name || q.subject_id?.subject_name || q.subject_id)?.toLowerCase().includes(filterSubject.toLowerCase())
+      );
+    }
+
+    if (filterTopic && filterTopic !== 'all') {
+      filtered = filtered.filter(q => 
+        q.topic_ids?.some(t => (t.name || t.topic_name || t).toLowerCase().includes(filterTopic.toLowerCase())) ||
+        (q.topic_id?.name || q.topic_id?.topic_name || q.topic_id)?.toLowerCase().includes(filterTopic.toLowerCase())
+      );
     }
 
     setFilteredQuestions(filtered);
@@ -294,6 +346,93 @@ const Questions = () => {
       navigate(`/admin/questions/edit/${questionId}`);
     } else {
       showError('Cannot edit this question', 'Invalid Question ID');
+    }
+  };
+
+  const handleQuickAssign = async (itemId: string, itemName: string) => {
+    if (!quickAssignTarget) return;
+    const { question, type } = quickAssignTarget;
+    
+    const qId = question._id || (question as any).id;
+    if (!qId) {
+      showError('Invalid Question ID', 'Could not identify the question to update.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let updateData: any = {};
+
+      if (type === 'exam') {
+        const currentExams = question.exam_names || [];
+        if (currentExams.includes(itemName)) {
+          showWarning('Already assigned to this exam');
+          setLoading(false);
+          return;
+        }
+        updateData.exam_names = [...currentExams, itemName];
+      } else if (type === 'subject') {
+        const currentSubs = Array.isArray(question.subject_ids) ? question.subject_ids : (question.subject_id ? [question.subject_id] : []);
+        const currentIds = currentSubs.map((s: any) => typeof s === 'string' ? s : (s._id || s.id));
+        if (currentIds.includes(itemId)) {
+          showWarning('Already assigned to this subject');
+          setLoading(false);
+          return;
+        }
+        updateData.subject_ids = [...currentIds, itemId];
+      } else if (type === 'topic') {
+        const currentTops = Array.isArray(question.topic_ids) ? question.topic_ids : (question.topic_id ? [question.topic_id] : []);
+        const currentIds = currentTops.map((t: any) => typeof t === 'string' ? t : (t._id || t.id));
+        if (currentIds.includes(itemId)) {
+          showWarning('Already assigned to this topic');
+          setLoading(false);
+          return;
+        }
+        updateData.topic_ids = [...currentIds, itemId];
+      }
+
+      await questionsAPI.update(qId, updateData);
+      showSuccess(`Successfully added ${type}`);
+      setQuickAssignTarget(null);
+      fetchQuestions();
+    } catch (error: any) {
+      showError(error.message || 'Failed to update assignment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveAssignment = async (question: Question, type: 'exam' | 'subject' | 'topic', itemIdOrName: string) => {
+    const qId = question._id || (question as any).id;
+    if (!qId) {
+      showError('Invalid Question ID', 'Could not identify the question to update.');
+      return;
+    }
+
+    const result = await showDeleteConfirm(`this ${type} assignment`);
+    if (!result.isConfirmed) return;
+
+    setLoading(true);
+    try {
+      let updateData: any = {};
+
+      if (type === 'exam') {
+        updateData.exam_names = (question.exam_names || []).filter(n => n !== itemIdOrName);
+      } else if (type === 'subject') {
+        const currentSubs = Array.isArray(question.subject_ids) ? question.subject_ids : (question.subject_id ? [question.subject_id] : []);
+        updateData.subject_ids = currentSubs.map((s: any) => typeof s === 'string' ? s : (s._id || s.id)).filter((id: string) => id !== itemIdOrName);
+      } else if (type === 'topic') {
+        const currentTops = Array.isArray(question.topic_ids) ? question.topic_ids : (question.topic_id ? [question.topic_id] : []);
+        updateData.topic_ids = currentTops.map((t: any) => typeof t === 'string' ? t : (t._id || t.id)).filter((id: string) => id !== itemIdOrName);
+      }
+
+      await questionsAPI.update(qId, updateData);
+      showSuccess(`Removed ${type} assignment`);
+      fetchQuestions();
+    } catch (error: any) {
+      showError(error.message || 'Failed to remove assignment');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -862,7 +1001,72 @@ const Questions = () => {
   return (
     <AdminLayout>
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+        <AdminPageHeading
+          title={
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 p-2 rounded-lg text-white">
+                <HelpCircle className="h-6 w-6" />
+              </div>
+              <span>Question Manager</span>
+            </div>
+          }
+          description="Manage and organize your question database"
+          eyebrow="Content Management"
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                onClick={() => setActiveTab('add')}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs h-8 px-3"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add Question
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={handleDownloadTemplate}
+                className="border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md text-xs h-8 px-3"
+              >
+                <Download className="h-3.5 w-3.5 mr-1" />
+                Export
+              </Button>
+              <Button 
+                onClick={() => setShowBulkUploadModal(true)}
+                className="bg-[#2eb872] hover:bg-[#239e5f] text-white rounded-md text-xs h-8 px-3"
+              >
+                <Upload className="h-3.5 w-3.5 mr-1" />
+                Bulk Add
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={() => setActiveTab('duplicates')}
+                className="bg-[#e63946] hover:bg-[#d62828] text-white rounded-md text-xs h-8 px-3"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Delete Duplicates
+              </Button>
+            </div>
+          }
+        />
 
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-[#1890ff] p-4 rounded-lg text-white shadow-md">
+            <h3 className="text-4xl font-bold mb-1">{totalQuestionsCount}</h3>
+            <p className="text-xs font-medium uppercase opacity-80">Total Questions</p>
+          </div>
+          <div className="bg-[#2eb872] p-4 rounded-lg text-white shadow-md">
+            <h3 className="text-4xl font-bold mb-1">{selectedQuestions.size}</h3>
+            <p className="text-xs font-medium uppercase opacity-80">Selected</p>
+          </div>
+          <div className="bg-[#13c2c2] p-4 rounded-lg text-white shadow-md">
+            <h3 className="text-4xl font-bold mb-1">{currentPage}</h3>
+            <p className="text-xs font-medium uppercase opacity-80">Current Page</p>
+          </div>
+          <div className="bg-[#faad14] p-4 rounded-lg text-white shadow-md">
+            <h3 className="text-4xl font-bold mb-1">{totalPages}</h3>
+            <p className="text-xs font-medium uppercase opacity-80">Total Pages</p>
+          </div>
+        </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex w-full overflow-x-auto gap-1 sm:gap-2 rounded-xl sm:rounded-2xl border border-border/70 p-1 sm:p-1.5 scrollbar-hide">
@@ -888,55 +1092,245 @@ const Questions = () => {
 
           <TabsContent value="list" className="space-y-3 sm:space-y-4">
             {/* Filters */}
-            <Card className="rounded-xl sm:rounded-[1.5rem] border border-border/70 shadow-lg">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex flex-col gap-3 sm:gap-4">
-                  <div className="flex-1">
-                    <Label className="text-xs sm:text-sm">Search</Label>
-                    <div className="relative mt-1">
-                      <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by question text, reference, or exam name..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-8 sm:pl-10 rounded-lg sm:rounded-xl text-xs sm:text-sm"
-                      />
-                    </div>
+            <Card className="rounded-xl border border-border/70 shadow-sm bg-gray-50/50">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                  <div className="lg:col-span-2">
+                    <Label className="text-[11px] font-bold text-gray-500 mb-1 flex items-center gap-1">
+                      <Search className="h-3 w-3" /> Search
+                    </Label>
+                    <Input
+                      placeholder="Search questions..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="h-9 text-xs rounded-md border-gray-300"
+                    />
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <div className="w-full sm:w-48">
-                      <Label className="text-xs sm:text-sm">Difficulty Level</Label>
-                      <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
-                        <SelectTrigger className="mt-1 rounded-lg sm:rounded-xl text-xs sm:text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Levels</SelectItem>
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(level => (
-                            <SelectItem key={level} value={level.toString()}>
-                              Level {level}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {(searchQuery || filterDifficulty !== 'all') && (
-                      <div className="flex items-end">
+                  <div>
+                    <Label className="text-[11px] font-bold text-gray-500 mb-1 flex items-center gap-1">
+                      <FolderTree className="h-3 w-3" /> Exam Name
+                    </Label>
+                    <Popover open={openExamSearch} onOpenChange={setOpenExamSearch}>
+                      <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          size="sm"
-                          className="rounded-lg sm:rounded-xl text-xs sm:text-sm"
-                          onClick={() => {
-                            setSearchQuery('');
-                            setFilterDifficulty('all');
-                          }}
+                          role="combobox"
+                          aria-expanded={openExamSearch}
+                          className="h-9 w-full justify-between text-xs font-normal border-gray-300 rounded-md bg-white hover:bg-white"
                         >
-                          <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                          Clear
+                          {filterExamName && filterExamName !== 'all'
+                            ? filterExamName
+                            : "All Exams"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
-                      </div>
-                    )}
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[200px] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search exam..." className="h-9 text-xs" />
+                          <CommandEmpty className="text-[11px] py-2 text-center">No exam found.</CommandEmpty>
+                          <CommandGroup className="max-h-[200px] overflow-y-auto">
+                            <CommandItem
+                              className="text-xs"
+                              onSelect={() => {
+                                setFilterExamName("all");
+                                setOpenExamSearch(false);
+                              }}
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${filterExamName === "all" ? "opacity-100" : "opacity-0"}`}
+                              />
+                              All Exams
+                            </CommandItem>
+                            {categories.map((cat) => (
+                              <CommandItem
+                                key={cat._id || cat.id}
+                                className="text-xs"
+                                onSelect={() => {
+                                  setFilterExamName(cat.name || cat.category_name);
+                                  setOpenExamSearch(false);
+                                }}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${filterExamName === (cat.name || cat.category_name) ? "opacity-100" : "opacity-0"}`}
+                                />
+                                {cat.name || cat.category_name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
+                  <div>
+                    <Label className="text-[11px] font-bold text-gray-500 mb-1 flex items-center gap-1">
+                      <BookOpen className="h-3 w-3" /> Subject
+                    </Label>
+                    <Popover open={openSubjectSearch} onOpenChange={setOpenSubjectSearch}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openSubjectSearch}
+                          className="h-9 w-full justify-between text-xs font-normal border-gray-300 rounded-md bg-white hover:bg-white"
+                        >
+                          {filterSubject && filterSubject !== 'all'
+                            ? filterSubject
+                            : "All Subjects"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[200px] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search subject..." className="h-9 text-xs" />
+                          <CommandEmpty className="text-[11px] py-2 text-center">No subject found.</CommandEmpty>
+                          <CommandGroup className="max-h-[200px] overflow-y-auto">
+                            <CommandItem
+                              className="text-xs"
+                              onSelect={() => {
+                                setFilterSubject("all");
+                                setOpenSubjectSearch(false);
+                              }}
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${filterSubject === "all" ? "opacity-100" : "opacity-0"}`}
+                              />
+                              All Subjects
+                            </CommandItem>
+                            {subjects.map((sub) => (
+                              <CommandItem
+                                key={sub._id || sub.id}
+                                className="text-xs"
+                                onSelect={() => {
+                                  setFilterSubject(sub.name || sub.subject_name);
+                                  setOpenSubjectSearch(false);
+                                }}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${filterSubject === (sub.name || sub.subject_name) ? "opacity-100" : "opacity-0"}`}
+                                />
+                                {sub.name || sub.subject_name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div>
+                    <Label className="text-[11px] font-bold text-gray-500 mb-1 flex items-center gap-1">
+                      <Tag className="h-3 w-3" /> Topic
+                    </Label>
+                    <Popover open={openTopicSearch} onOpenChange={setOpenTopicSearch}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openTopicSearch}
+                          className="h-9 w-full justify-between text-xs font-normal border-gray-300 rounded-md bg-white hover:bg-white"
+                        >
+                          {filterTopic && filterTopic !== 'all'
+                            ? filterTopic
+                            : "All Topics"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[200px] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search topic..." className="h-9 text-xs" />
+                          <CommandEmpty className="text-[11px] py-2 text-center">No topic found.</CommandEmpty>
+                          <CommandGroup className="max-h-[200px] overflow-y-auto">
+                            <CommandItem
+                              className="text-xs"
+                              onSelect={() => {
+                                setFilterTopic("all");
+                                setOpenTopicSearch(false);
+                              }}
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${filterTopic === "all" ? "opacity-100" : "opacity-0"}`}
+                              />
+                              All Topics
+                            </CommandItem>
+                            {topics.map((topic) => (
+                              <CommandItem
+                                key={topic._id || topic.id}
+                                className="text-xs"
+                                onSelect={() => {
+                                  setFilterTopic(topic.name || topic.topic_name);
+                                  setOpenTopicSearch(false);
+                                }}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${filterTopic === (topic.name || topic.topic_name) ? "opacity-100" : "opacity-0"}`}
+                                />
+                                {topic.name || topic.topic_name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div>
+                    <Label className="text-[11px] font-bold text-gray-500 mb-1">Difficulty</Label>
+                    <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
+                      <SelectTrigger className="h-9 text-xs rounded-md border-gray-300">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => <SelectItem key={l} value={l.toString()}>{l}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[11px] font-bold text-gray-500 mb-1">Type</Label>
+                    <Select defaultValue="all">
+                      <SelectTrigger className="h-9 text-xs rounded-md border-gray-300">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                   <div className="flex gap-2">
+                     <Button 
+                       variant="outline" 
+                       size="sm" 
+                       className="h-8 px-2 rounded-md border-gray-300 text-gray-500 hover:text-gray-700"
+                       onClick={() => {
+                         setSearchQuery('');
+                         setFilterDifficulty('all');
+                         setFilterExamName('');
+                         setFilterSubject('');
+                         setFilterTopic('');
+                         setCurrentPage(1);
+                       }}
+                       title="Reset Filters"
+                     >
+                       <RotateCcw className="h-4 w-4" />
+                     </Button>
+                     <Button variant="outline" size="sm" className="h-8 px-2 rounded-md border-gray-300 text-gray-500">
+                       <Rocket className="h-4 w-4" />
+                     </Button>
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <Label className="text-[11px] font-bold text-gray-500">Per Page</Label>
+                     <Select value={itemsPerPage.toString()} onValueChange={(val) => setItemsPerPage(parseInt(val))}>
+                       <SelectTrigger className="h-8 w-20 text-xs rounded-md border-gray-300">
+                         <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="10">10</SelectItem>
+                         <SelectItem value="25">25</SelectItem>
+                         <SelectItem value="50">50</SelectItem>
+                         <SelectItem value="100">100</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   </div>
                 </div>
               </CardContent>
             </Card>
@@ -974,213 +1368,176 @@ const Questions = () => {
               </div>
 
               {loading ? (
-                <Card className="rounded-xl sm:rounded-[1.5rem] border border-border/70">
-                  <CardContent className="py-8 sm:py-12 md:py-14">
+                <Card className="rounded-xl border border-border/70 shadow-sm">
+                  <CardContent className="py-12">
                     <Loader text="Loading questions..." />
                   </CardContent>
                 </Card>
               ) : filteredQuestions.length === 0 ? (
-                <Card className="rounded-xl sm:rounded-[1.5rem] border border-border/70">
-                  <CardContent className="py-8 sm:py-12 md:py-14 text-center text-xs sm:text-sm">
-                    <div className="mb-2 sm:mb-3 text-3xl sm:text-4xl md:text-5xl">❓</div>
-                    <p className="font-semibold text-sm sm:text-base">No questions found</p>
-                    <p className="text-muted-foreground text-xs sm:text-sm mt-1">
-                      {searchQuery || filterDifficulty !== 'all'
+                <Card className="rounded-xl border border-border/70 shadow-sm">
+                  <CardContent className="py-12 text-center">
+                    <div className="mb-3 text-4xl">❓</div>
+                    <p className="font-semibold text-base">No questions found</p>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      {searchQuery || filterDifficulty !== 'all' || filterExamName || filterSubject || filterTopic
                         ? 'Try adjusting your filters'
                         : 'Click "Add question" to create your first one.'}
                     </p>
                   </CardContent>
                 </Card>
               ) : (
-                filteredQuestions.map((question, idx) => {
-                  const questionId = question._id || question.id || '';
-                  const options = [
-                    question.option_a,
-                    question.option_b,
-                    question.option_c,
-                    question.option_d,
-                    question.option_x,
-                  ];
-                  return (
-                    <Card
-                      key={questionId}
-                      className={`rounded-xl sm:rounded-[1.5rem] border hover:-translate-y-0.5 hover:shadow-xl transition ${selectedQuestions.has(questionId) ? 'border-red-300 bg-red-50/30' : 'border-border/70'}`}
-                    >
-                      <CardContent className="p-3 sm:p-4 md:p-5 space-y-2 sm:space-y-3">
-                        <div className="flex items-start gap-3">
-                          <Checkbox
-                            checked={selectedQuestions.has(questionId)}
-                            onCheckedChange={() => handleSelectQuestion(questionId)}
-                            aria-label={`Select question ${idx + 1}`}
-                          />
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
-                              <h3 className="font-semibold text-xs sm:text-sm md:text-base break-words flex-1 min-w-0">
-                                Q{(currentPage - 1) * itemsPerPage + idx + 1}. {question.question_text}
-                              </h3>
-                              {question.difficulty_level && (
-                                <Badge className={`rounded-full text-[10px] sm:text-xs flex-shrink-0 ${getDifficultyColor(question.difficulty_level)}`}>
-                                  Level {question.difficulty_level}
-                                </Badge>
-                              )}
-                              <Badge 
-                                variant="outline" 
-                                className={`rounded-full text-[10px] sm:text-xs flex-shrink-0 ${
-                                  question.answer_type === 'multiple' 
-                                    ? 'border-blue-400 text-blue-600 bg-blue-50' 
-                                    : question.answer_type === 'none'
-                                      ? 'border-gray-400 text-gray-600 bg-gray-50'
-                                      : 'border-green-400 text-green-600 bg-green-50'
-                                }`}
-                              >
-                                {question.answer_type === 'multiple' 
-                                  ? 'Multi Answer' 
-                                  : question.answer_type === 'none' 
-                                    ? 'No Answer' 
-                                    : 'Single Answer'}
-                              </Badge>
-                            </div>
-                            {question.question_text_hindi && (
-                              <p className="text-xs sm:text-sm text-muted-foreground mb-2 break-words">
-                                (Hindi) {question.question_text_hindi}
-                              </p>
-                            )}
-                            {question.exam_names && question.exam_names.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
-                                {question.exam_names.map((name, i) => (
-                                  <Badge key={i} variant="secondary" className="rounded-full text-[10px] sm:text-xs">
-                                    {name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                            {question.question_reference && (
-                              <p className="text-[10px] sm:text-xs text-muted-foreground break-words">
-                                Reference: {question.question_reference}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="rounded-lg sm:rounded-xl h-8 w-8 sm:h-9 sm:w-9 p-0"
-                                  onClick={() => setViewingQuestion(question)}
-                                >
-                                  <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-[95vw] sm:max-w-3xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-4">
-                                <DialogHeader>
-                                  <DialogTitle className="text-sm sm:text-base">Question Details</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-3 sm:space-y-4">
-                                  <div>
-                                    <Label className="text-[10px] sm:text-xs text-muted-foreground">Question</Label>
-                                    <p className="font-medium text-xs sm:text-sm break-words">{question.question_text}</p>
-                                    {question.question_text_hindi && (
-                                      <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words">
-                                        (Hindi) {question.question_text_hindi}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <Label className="text-[10px] sm:text-xs text-muted-foreground">Options</Label>
-                                    <div className="space-y-2 mt-2">
-                                      {options.map((opt, optIdx) => (
-                                        opt && (
-                                          <div
-                                            key={optIdx}
-                                            className={`rounded-lg sm:rounded-xl border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm break-words ${isOptionCorrect(question, optIdx)
-                                                ? 'border-success bg-success/10'
-                                                : 'border-border bg-muted/60'
-                                              }`}
-                                          >
-                                            <span className="font-semibold mr-1 sm:mr-2">
-                                              {getOptionLabel(optIdx)}.
-                                            </span>
-                                            {opt}
-                                            {isOptionCorrect(question, optIdx) && (
-                                              <span className="ml-1 sm:ml-2 text-success font-semibold text-[10px] sm:text-xs">
-                                                ✓ {question.answer_type === 'multiple' ? 'Correct' : 'Correct'}
-                                              </span>
-                                            )}
-                                            {optIdx === 4 && (
-                                              <Badge variant="outline" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">Hidden</Badge>
-                                            )}
-                                          </div>
-                                        )
-                                      ))}
-                                    </div>
-                                  </div>
-                                  {(question.hint || question.hint_hindi) && (
-                                    <div>
-                                      <Label className="text-[10px] sm:text-xs text-muted-foreground">Hint</Label>
-                                      {question.hint && <p className="text-xs sm:text-sm break-words">{question.hint}</p>}
-                                      {question.hint_hindi && (
-                                        <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words italic">
-                                          (Hindi) {question.hint_hindi}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-                                  {(question.explanation || question.explanation_hindi) && (
-                                    <div>
-                                      <Label className="text-[10px] sm:text-xs text-muted-foreground">Explanation</Label>
-                                      {question.explanation && <p className="text-xs sm:text-sm break-words">{question.explanation}</p>}
-                                      {question.explanation_hindi && (
-                                        <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words italic">
-                                          (Hindi) {question.explanation_hindi}
-                                        </p>
-                                      )}
-                                    </div>
+                <div className="border border-border/70 rounded-xl overflow-hidden shadow-sm bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50/80 border-b border-border/70">
+                          <th className="p-3 w-12">
+                            <Checkbox
+                              checked={filteredQuestions.length > 0 && selectedQuestions.size === filteredQuestions.length}
+                              onCheckedChange={handleSelectAll}
+                            />
+                          </th>
+                          <th className="p-3 text-[11px] font-bold uppercase text-gray-500 w-16">ID</th>
+                          <th className="p-3 text-[11px] font-bold uppercase text-gray-500 min-w-[250px]">Question</th>
+                          <th className="p-3 text-[11px] font-bold uppercase text-gray-500">Exam</th>
+                          <th className="p-3 text-[11px] font-bold uppercase text-gray-500">Subject</th>
+                          <th className="p-3 text-[11px] font-bold uppercase text-gray-500">Topic</th>
+                          <th className="p-3 text-[11px] font-bold uppercase text-gray-500 w-16">Level</th>
+                          <th className="p-3 text-[11px] font-bold uppercase text-gray-500 w-32">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {filteredQuestions.map((question, idx) => {
+                          const questionId = question._id || question.id || '';
+                          const examNames = question.exam_names || [];
+                          const subs = (Array.isArray(question.subject_ids) ? question.subject_ids : 
+                                           (question.subject_id ? [question.subject_id] : []));
+                          const tops = (Array.isArray(question.topic_ids) ? question.topic_ids : 
+                                         (question.topic_id ? [question.topic_id] : []));
+                          
+                          return (
+                            <tr key={questionId} className={`hover:bg-gray-50/50 transition-colors ${selectedQuestions.has(questionId) ? 'bg-blue-50/30' : ''}`}>
+                              <td className="p-3">
+                                <Checkbox
+                                  checked={selectedQuestions.has(questionId)}
+                                  onCheckedChange={() => handleSelectQuestion(questionId)}
+                                />
+                              </td>
+                              <td className="p-3">
+                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                                  {questionId.slice(-4)}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <div className="space-y-1">
+                                  <p className="text-xs font-medium line-clamp-2" title={question.question_text}>
+                                    {question.question_text}
+                                  </p>
+                                  {question.question_text_hindi && (
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1" title={question.question_text_hindi}>
+                                      {question.question_text_hindi}
+                                    </p>
                                   )}
                                 </div>
-                              </DialogContent>
-                            </Dialog>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-lg sm:rounded-xl h-8 w-8 sm:h-9 sm:w-9 p-0"
-                              onClick={() => handleEdit(question)}
-                            >
-                              <Pencil className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-lg sm:rounded-xl border-destructive/40 text-destructive h-8 w-8 sm:h-9 sm:w-9 p-0"
-                              onClick={() => handleDelete((question._id || question.id) as string)}
-                            >
-                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="space-y-1.5 sm:space-y-2">
-                          {options.slice(0, 4).map((option, optIdx) => (
-                            option && (
-                              <div
-                                key={optIdx}
-                                className={`rounded-lg sm:rounded-xl border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm break-words ${isOptionCorrect(question, optIdx)
-                                    ? 'border-success bg-success/10'
-                                    : 'border-border bg-muted/60'
-                                  }`}
-                              >
-                                <span className="font-semibold mr-1 sm:mr-2">{getOptionLabel(optIdx)}.</span>
-                                {option}
-                                {isOptionCorrect(question, optIdx) && (
-                                  <span className="ml-1 sm:ml-2 text-success font-semibold text-[10px] sm:text-xs">✓</span>
-                                )}
-                              </div>
-                            )
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })
+                              </td>
+                              <td className="p-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {examNames.map((name, i) => (
+                                    <Badge key={i} variant="secondary" className="bg-[#e6f7ff] text-[#1890ff] hover:bg-[#bae7ff] border-none text-[9px] h-5 px-1.5 rounded flex items-center gap-1">
+                                      {name}
+                                      <X className="h-2 w-2 cursor-pointer" onClick={() => handleRemoveAssignment(question, 'exam', name)} />
+                                    </Badge>
+                                  ))}
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-5 w-5 rounded-full hover:bg-gray-100 text-gray-400"
+                                    onClick={() => setQuickAssignTarget({question, type: 'exam'})}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {subs.map((s: any, i: number) => (
+                                    <Badge key={i} variant="secondary" className="bg-[#e6fffb] text-[#13c2c2] hover:bg-[#b5f5ec] border-none text-[9px] h-5 px-1.5 rounded flex items-center gap-1">
+                                      {typeof s === 'string' ? s : (s.name || s.subject_name)}
+                                      <X className="h-2 w-2 cursor-pointer" onClick={() => handleRemoveAssignment(question, 'subject', typeof s === 'string' ? s : (s._id || s.id))} />
+                                    </Badge>
+                                  ))}
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-5 w-5 rounded-full hover:bg-gray-100 text-gray-400"
+                                    onClick={() => setQuickAssignTarget({question, type: 'subject'})}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {tops.map((t: any, i: number) => (
+                                    <Badge key={i} variant="secondary" className="bg-[#f6ffed] text-[#52c41a] hover:bg-[#d9f7be] border-none text-[9px] h-5 px-1.5 rounded flex items-center gap-1">
+                                      {typeof t === 'string' ? t : (t.name || t.topic_name)}
+                                      <X className="h-2 w-2 cursor-pointer" onClick={() => handleRemoveAssignment(question, 'topic', typeof t === 'string' ? t : (t._id || t.id))} />
+                                    </Badge>
+                                  ))}
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-5 w-5 rounded-full hover:bg-gray-100 text-gray-400"
+                                    onClick={() => setQuickAssignTarget({question, type: 'topic'})}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                  question.difficulty_level <= 3 ? 'bg-green-100 text-green-700' :
+                                  question.difficulty_level <= 7 ? 'bg-orange-100 text-orange-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {question.difficulty_level}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 rounded-lg hover:bg-blue-50 text-blue-600"
+                                    onClick={() => setViewingQuestion(question)}
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 rounded-lg hover:bg-amber-50 text-amber-600"
+                                    onClick={() => handleEdit(question)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 rounded-lg hover:bg-red-50 text-red-600"
+                                    onClick={() => handleDelete(questionId)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
               {filteredQuestions.length > 0 && totalPages > 1 && (
                 <div className="pt-4">
@@ -1259,8 +1616,8 @@ const Questions = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id} className="text-xs sm:text-sm">
-                            {cat.name || cat.category_name}
+                          <SelectItem key={cat._id || cat.id} value={cat._id || cat.id} className="text-xs sm:text-sm">
+                            {cat.category_name || cat.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1393,6 +1750,123 @@ const Questions = () => {
           </TabsContent>
         </Tabs>
 
+        {/* View Question Modal */}
+        <Dialog open={!!viewingQuestion} onOpenChange={(open) => !open && setViewingQuestion(null)}>
+          <DialogContent className="max-w-[95vw] sm:max-w-3xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-4 p-0 rounded-xl overflow-hidden">
+            <DialogHeader className="p-4 sm:p-6 bg-gray-50 border-b">
+              <DialogTitle className="text-sm sm:text-base font-bold flex items-center gap-2">
+                <Eye className="h-4 w-4 text-blue-600" />
+                Question Details
+              </DialogTitle>
+            </DialogHeader>
+            {viewingQuestion && (
+              <div className="p-4 sm:p-8 space-y-6">
+                <div className="space-y-2">
+                  <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">The Question</Label>
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <p className="font-semibold text-sm sm:text-base text-gray-800 break-words leading-relaxed">{viewingQuestion.question_text}</p>
+                    {viewingQuestion.question_text_hindi && (
+                      <div className="mt-3 pt-3 border-t border-gray-200/50">
+                        <p className="text-xs sm:text-sm text-gray-600 font-medium break-words leading-relaxed">{viewingQuestion.question_text_hindi}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Options (Bilingual)</Label>
+                  <div className="grid grid-cols-1 gap-4">
+                    {[
+                      { label: 'A', text: viewingQuestion.option_a, hindi: viewingQuestion.option_a_hindi },
+                      { label: 'B', text: viewingQuestion.option_b, hindi: viewingQuestion.option_b_hindi },
+                      { label: 'C', text: viewingQuestion.option_c, hindi: viewingQuestion.option_c_hindi },
+                      { label: 'D', text: viewingQuestion.option_d, hindi: viewingQuestion.option_d_hindi },
+                    ].map((opt, idx) => {
+                      const isCorrect = Array.isArray(viewingQuestion.correct_answers) 
+                        ? viewingQuestion.correct_answers.includes(idx)
+                        : viewingQuestion.correct_answer === idx;
+                      
+                      return (opt.text || opt.hindi) && (
+                        <div
+                          key={idx}
+                          className={`rounded-xl border p-4 transition-all shadow-sm ${isCorrect
+                              ? 'border-green-500 bg-green-50/50 ring-1 ring-green-500/20'
+                              : 'border-gray-100 bg-white'
+                            }`}
+                        >
+                          <div className="flex items-start gap-4">
+                            <span className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                              isCorrect ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
+                            }`}>
+                              {opt.label}
+                            </span>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
+                                <p className={`text-xs sm:text-sm font-medium ${isCorrect ? 'text-green-800' : 'text-gray-700'}`}>{opt.text}</p>
+                              </div>
+                              {opt.hindi && (
+                                <div className="flex items-center gap-2 pt-2 border-t border-gray-50">
+                                  <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
+                                  <p className="text-xs sm:text-sm text-gray-600 font-medium">{opt.hindi}</p>
+                                </div>
+                              )}
+                            </div>
+                            {isCorrect && <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-1" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Classification</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        Level {viewingQuestion.difficulty_level}
+                      </Badge>
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 capitalize">
+                        {viewingQuestion.answer_type || 'Single'} Answer
+                      </Badge>
+                    </div>
+                  </div>
+                  {viewingQuestion.question_reference && (
+                    <div className="space-y-2">
+                      <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Reference</Label>
+                      <p className="text-xs sm:text-sm font-medium text-gray-600">{viewingQuestion.question_reference}</p>
+                    </div>
+                  )}
+                </div>
+
+                {(viewingQuestion.hint || viewingQuestion.hint_hindi) && (
+                  <div className="space-y-2 pt-4 border-t">
+                    <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Hint</Label>
+                    <div className="p-3 bg-blue-50/30 rounded-xl border border-blue-100/50">
+                      <p className="text-xs sm:text-sm text-gray-700">{viewingQuestion.hint}</p>
+                      {viewingQuestion.hint_hindi && <p className="text-xs text-gray-500 mt-1 italic">{viewingQuestion.hint_hindi}</p>}
+                    </div>
+                  </div>
+                )}
+
+                {(viewingQuestion.explanation || viewingQuestion.explanation_hindi) && (
+                  <div className="space-y-2 pt-4 border-t">
+                    <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Explanation</Label>
+                    <div className="p-3 bg-green-50/30 rounded-xl border border-green-100/50">
+                      <p className="text-xs sm:text-sm text-gray-700">{viewingQuestion.explanation}</p>
+                      {viewingQuestion.explanation_hindi && <p className="text-xs text-gray-500 mt-1 italic">{viewingQuestion.explanation_hindi}</p>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="p-4 sm:p-6 bg-gray-50 border-t flex justify-end">
+              <Button onClick={() => setViewingQuestion(null)} className="rounded-xl px-8">Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Add Tags Modal */}
         <Dialog open={showAddTagsModal} onOpenChange={setShowAddTagsModal}>
           <DialogContent className="max-w-[95vw] sm:max-w-md mx-2 sm:mx-4">
@@ -1450,6 +1924,68 @@ const Questions = () => {
                   {loading ? 'Adding...' : 'Apply Tags'}
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Quick Assign Modal */}
+        <Dialog open={!!quickAssignTarget} onOpenChange={(open) => !open && setQuickAssignTarget(null)}>
+          <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-xl">
+            <DialogHeader className="p-4 border-b bg-gray-50">
+              <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                <Plus className="h-4 w-4 text-primary" />
+                Assign {quickAssignTarget?.type === 'exam' ? 'Exam' : quickAssignTarget?.type === 'subject' ? 'Subject' : 'Topic'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="p-4 space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder={`Search ${quickAssignTarget?.type}...`}
+                  value={assignSearchQuery}
+                  onChange={(e) => setAssignSearchQuery(e.target.value)}
+                  className="pl-9 h-10"
+                />
+              </div>
+              <div className="max-h-[300px] overflow-y-auto space-y-1 pr-1">
+                {(quickAssignTarget?.type === 'exam' ? categories : 
+                  quickAssignTarget?.type === 'subject' ? subjects : 
+                  topics).filter(item => 
+                    (item.name || item.category_name || item.subject_name || item.topic_name || "")
+                    .toLowerCase().includes(assignSearchQuery.toLowerCase())
+                  ).map((item) => (
+                    <Button
+                      key={item._id || item.id}
+                      variant="ghost"
+                      className="w-full justify-start text-xs h-9 hover:bg-primary/5 hover:text-primary"
+                      onClick={() => handleQuickAssign(item._id || item.id, item.name || item.category_name || item.subject_name || item.topic_name)}
+                    >
+                      {item.name || item.category_name || item.subject_name || item.topic_name}
+                    </Button>
+                  ))
+                }
+              </div>
+            </div>
+            <div className="p-3 bg-gray-50 border-t flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setQuickAssignTarget(null)}>Cancel</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Upload Modal */}
+        <Dialog open={showBulkUploadModal} onOpenChange={setShowBulkUploadModal}>
+          <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-lg">
+            <DialogHeader className="px-6 py-4 border-b border-gray-100 flex flex-row items-center justify-between">
+              <DialogTitle className="text-lg font-semibold text-gray-800">Bulk Add Questions</DialogTitle>
+            </DialogHeader>
+            <div className="p-6">
+              <BulkUpload 
+                onUpload={async (file, format) => {
+                  await handleBulkUpload(file, format);
+                  setShowBulkUploadModal(false);
+                }} 
+                onCancel={() => setShowBulkUploadModal(false)}
+              />
             </div>
           </DialogContent>
         </Dialog>
