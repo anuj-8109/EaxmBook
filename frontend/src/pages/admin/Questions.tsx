@@ -80,17 +80,17 @@ const Questions = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
   const [languageFilter, setLanguageFilter] = useState<string>('all');
-  const [filterExamName, setFilterExamName] = useState('');
-  const [filterSubject, setFilterSubject] = useState('');
-  const [filterTopic, setFilterTopic] = useState('');
+  const [filterExamNames, setFilterExamNames] = useState<string[]>([]);
+  const [filterSubjects, setFilterSubjects] = useState<string[]>([]);
+  const [filterTopics, setFilterTopics] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('list');
-  
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalQuestionsCount, setTotalQuestionsCount] = useState(0);
-  
+
   // Multi-select states
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
 
@@ -116,7 +116,7 @@ const Questions = () => {
   const [viewingQuestionDetails, setViewingQuestionDetails] = useState<Question | null>(null);
 
   // Quick Assign states
-  const [quickAssignTarget, setQuickAssignTarget] = useState<{question: Question, type: 'exam' | 'subject' | 'topic'} | null>(null);
+  const [quickAssignTarget, setQuickAssignTarget] = useState<{ question: Question, type: 'exam' | 'subject' | 'topic' } | null>(null);
   const [assignSearchQuery, setAssignSearchQuery] = useState('');
 
   // Search states for comboboxes
@@ -226,7 +226,7 @@ const Questions = () => {
         subjectsAPI.getAll(undefined, 1, 1000),
         topicsAPI.getAll(undefined, 1, 1000)
       ]);
-      
+
       // Normalize data structure
       const normalizedCats = categoriesData?.categories || categoriesData?.data || categoriesData || [];
       const normalizedTags = tagsData?.data || tagsData || [];
@@ -244,7 +244,7 @@ const Questions = () => {
 
   useEffect(() => {
     filterQuestions();
-  }, [questions, searchQuery, filterDifficulty, filterExamName, filterSubject, filterTopic, languageFilter]);
+  }, [questions, searchQuery, filterDifficulty, filterExamNames, filterSubjects, filterTopics, languageFilter]);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -252,7 +252,7 @@ const Questions = () => {
       const params: any = { page: currentPage, limit: itemsPerPage };
       if (filterDifficulty !== 'all') params.difficulty_level = filterDifficulty;
       if (languageFilter !== 'all') params.language = languageFilter;
-      
+
       const data = await questionsAPI.getAll(params);
       // Handle paginated response: {questions: [...], total: 75, page: 1, limit: 50}
       // or direct array response
@@ -301,24 +301,26 @@ const Questions = () => {
       filtered = filtered.filter(q => q.difficulty_level === level);
     }
 
-    if (filterExamName && filterExamName !== 'all') {
-      filtered = filtered.filter(q => 
-        q.exam_names?.some(name => name.toLowerCase().includes(filterExamName.toLowerCase()))
+    if (filterExamNames.length > 0) {
+      filtered = filtered.filter(q =>
+        q.exam_names?.some(name => filterExamNames.includes(name))
       );
     }
-
-    if (filterSubject && filterSubject !== 'all') {
-      filtered = filtered.filter(q => 
-        q.subject_ids?.some(s => (s.name || s.subject_name || s).toLowerCase().includes(filterSubject.toLowerCase())) ||
-        (q.subject_id?.name || q.subject_id?.subject_name || q.subject_id)?.toLowerCase().includes(filterSubject.toLowerCase())
-      );
+    
+    if (filterSubjects.length > 0) {
+      filtered = filtered.filter(q => {
+        const questionSubs = (Array.isArray(q.subject_ids) ? q.subject_ids : (q.subject_id ? [q.subject_id] : []))
+          .map((s: any) => typeof s === 'string' ? s : (s.name || s.subject_name || s));
+        return questionSubs.some(s => filterSubjects.includes(s));
+      });
     }
-
-    if (filterTopic && filterTopic !== 'all') {
-      filtered = filtered.filter(q => 
-        q.topic_ids?.some(t => (t.name || t.topic_name || t).toLowerCase().includes(filterTopic.toLowerCase())) ||
-        (q.topic_id?.name || q.topic_id?.topic_name || q.topic_id)?.toLowerCase().includes(filterTopic.toLowerCase())
-      );
+    
+    if (filterTopics.length > 0) {
+      filtered = filtered.filter(q => {
+        const questionTops = (Array.isArray(q.topic_ids) ? q.topic_ids : (q.topic_id ? [q.topic_id] : []))
+          .map((t: any) => typeof t === 'string' ? t : (t.name || t.topic_name || t));
+        return questionTops.some(t => filterTopics.includes(t));
+      });
     }
 
     setFilteredQuestions(filtered);
@@ -358,7 +360,7 @@ const Questions = () => {
   const handleQuickAssign = async (itemId: string, itemName: string) => {
     if (!quickAssignTarget) return;
     const { question, type } = quickAssignTarget;
-    
+
     const qId = question._id || (question as any).id;
     if (!qId) {
       showError('Invalid Question ID', 'Could not identify the question to update.');
@@ -494,11 +496,11 @@ const Questions = () => {
   // Download CSV Template
   const handleDownloadTemplate = () => {
     const headers = [
-      'question_text', 'question_text_hindi', 
+      'question_text', 'question_text_hindi',
       'option_a', 'option_a_hindi',
-      'option_b', 'option_b_hindi', 
+      'option_b', 'option_b_hindi',
       'option_c', 'option_c_hindi',
-      'option_d', 'option_d_hindi', 
+      'option_d', 'option_d_hindi',
       'option_x', 'option_x_hindi',
       'correct_answer', 'answer_type', 'difficulty_level', 'time_duration',
       'question_reference', 'exam_names', 'category_ids', 'subject_ids', 'topic_ids',
@@ -506,14 +508,14 @@ const Questions = () => {
     ];
     const sampleRow = [
       'What is the capital of India?', 'भारत की राजधानी क्या है?',
-      'Delhi', 'दिल्ली', 
-      'Mumbai', 'मुंबई', 
+      'Delhi', 'दिल्ली',
+      'Mumbai', 'मुंबई',
       'Kolkata', 'कोलकाता',
-      'Chennai', 'चेन्नई', 
+      'Chennai', 'चेन्नई',
       'None', 'कोई नहीं',
       '0', 'single', '5', '60', 'Sample Reference', 'SSC|UPSC',
       'cat_id', 'sub_id', 'topic_id',
-      'It is in North India', 'यह उत्तर भारत में है', 
+      'It is in North India', 'यह उत्तर भारत में है',
       'New Delhi became the capital in 1911', 'नई दिल्ली 1911 में राजधानी बनी'
     ];
     const csvContent = [headers.join(','), sampleRow.map(v => `"${v}"`).join(',')].join('\n');
@@ -602,11 +604,11 @@ const Questions = () => {
     setLoading(true);
     try {
       const questionsToCreate = [];
-      
+
       for (let i = 0; i < questionCount; i++) {
         const qEn = enQuestions[i] || { options: {}, question: '', answer: '', solution: '', difficulty: null };
         const qHi = hiQuestions[i] || { options: {}, question: '', answer: '', solution: '', difficulty: null };
-        
+
         const difficulty = qEn.difficulty || qHi.difficulty || parseInt(quickAddDifficulty) || 5;
         const answerMap: { [key: string]: number } = { a: 0, b: 1, c: 2, d: 3 };
         const rawAns = qEn.answer || qHi.answer || 'a';
@@ -784,7 +786,7 @@ const Questions = () => {
         if (firstRow) {
           const text = firstRow.textContent?.toLowerCase() || '';
           if (text.includes('question') || text.includes('difficulty') ||
-              text.includes('option') || text.includes('answer')) {
+            text.includes('option') || text.includes('answer')) {
             questionsTable = table;
             break;
           }
@@ -820,7 +822,7 @@ const Questions = () => {
             if (text.includes('hindi') && text.includes('hint')) return 'hint_hindi';
             if (text.includes('hindi') && text.includes('explanation')) return 'explanation_hindi';
             if (text.includes('hindi') && text.includes('solution')) return 'explanation_hindi';
-            
+
             if (text === 'question' || text.includes('question')) return 'question_text';
             if (text.includes('option a') || (text.includes('option') && text.includes('a'))) return 'option_a';
             if (text.includes('option b') || (text.includes('option') && text.includes('b'))) return 'option_b';
@@ -1050,14 +1052,14 @@ const Questions = () => {
           eyebrow="Content Management"
           action={
             <div className="flex flex-wrap gap-2">
-              <Button 
+              <Button
                 onClick={() => setActiveTab('add')}
                 className="bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs h-8 px-3"
               >
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Add Question
               </Button>
-              <Button 
+              <Button
                 variant="outline"
                 onClick={handleDownloadTemplate}
                 className="border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md text-xs h-8 px-3"
@@ -1065,14 +1067,14 @@ const Questions = () => {
                 <Download className="h-3.5 w-3.5 mr-1" />
                 Export
               </Button>
-              <Button 
+              <Button
                 onClick={() => setShowBulkUploadModal(true)}
                 className="bg-[#2eb872] hover:bg-[#239e5f] text-white rounded-md text-xs h-8 px-3"
               >
                 <Upload className="h-3.5 w-3.5 mr-1" />
                 Bulk Add
               </Button>
-              <Button 
+              <Button
                 variant="destructive"
                 onClick={() => setActiveTab('duplicates')}
                 className="bg-[#e63946] hover:bg-[#d62828] text-white rounded-md text-xs h-8 px-3"
@@ -1084,25 +1086,7 @@ const Questions = () => {
           }
         />
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[#1890ff] p-4 rounded-lg text-white shadow-md">
-            <h3 className="text-4xl font-bold mb-1">{totalQuestionsCount}</h3>
-            <p className="text-xs font-medium uppercase opacity-80">Total Questions</p>
-          </div>
-          <div className="bg-[#2eb872] p-4 rounded-lg text-white shadow-md">
-            <h3 className="text-4xl font-bold mb-1">{selectedQuestions.size}</h3>
-            <p className="text-xs font-medium uppercase opacity-80">Selected</p>
-          </div>
-          <div className="bg-[#13c2c2] p-4 rounded-lg text-white shadow-md">
-            <h3 className="text-4xl font-bold mb-1">{currentPage}</h3>
-            <p className="text-xs font-medium uppercase opacity-80">Current Page</p>
-          </div>
-          <div className="bg-[#faad14] p-4 rounded-lg text-white shadow-md">
-            <h3 className="text-4xl font-bold mb-1">{totalPages}</h3>
-            <p className="text-xs font-medium uppercase opacity-80">Total Pages</p>
-          </div>
-        </div>
+
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex w-full overflow-x-auto gap-1 sm:gap-2 rounded-xl sm:rounded-2xl border border-border/70 p-1 sm:p-1.5 scrollbar-hide">
@@ -1136,17 +1120,17 @@ const Questions = () => {
                   Filter Questions
                 </h3>
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="xs" 
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     className="h-7 px-2 text-[10px] font-bold text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                     onClick={() => {
                       setSearchQuery('');
                       setFilterDifficulty('all');
                       setLanguageFilter('all');
-                      setFilterExamName('');
-                      setFilterSubject('');
-                      setFilterTopic('');
+                      setFilterExamNames([]);
+                      setFilterSubjects([]);
+                      setFilterTopics([]);
                       setCurrentPage(1);
                     }}
                   >
@@ -1204,7 +1188,7 @@ const Questions = () => {
                           className="h-10 w-full justify-between text-xs font-medium border-gray-200 rounded-xl bg-gray-50/30 hover:bg-white hover:border-indigo-200 transition-all text-left px-3"
                         >
                           <span className="truncate">
-                            {filterExamName && filterExamName !== 'all' ? filterExamName : "All Exams"}
+                            {filterExamNames.length === 0 ? "All Exams" : `${filterExamNames.length} Selected`}
                           </span>
                           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-40" />
                         </Button>
@@ -1214,29 +1198,24 @@ const Questions = () => {
                           <CommandInput placeholder="Search exam..." className="h-10 text-xs" />
                           <CommandEmpty className="text-[10px] py-4 text-center text-gray-400">No exam found.</CommandEmpty>
                           <CommandGroup className="max-h-[220px] overflow-y-auto">
-                            <CommandItem
-                              className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
-                              onSelect={() => {
-                                setFilterExamName("all");
-                                setOpenExamSearch(false);
-                              }}
-                            >
-                              <Check className={`mr-2 h-3.5 w-3.5 ${filterExamName === "all" ? "text-indigo-600" : "opacity-0"}`} />
-                              All Exams
-                            </CommandItem>
-                            {categories.map((cat) => (
-                              <CommandItem
-                                key={cat._id || cat.id}
-                                className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
-                                onSelect={() => {
-                                  setFilterExamName(cat.name || cat.category_name);
-                                  setOpenExamSearch(false);
-                                }}
-                              >
-                                <Check className={`mr-2 h-3.5 w-3.5 ${filterExamName === (cat.name || cat.category_name) ? "text-indigo-600" : "opacity-0"}`} />
-                                {cat.name || cat.category_name}
-                              </CommandItem>
-                            ))}
+                            {categories.map((cat) => {
+                              const name = cat.name || cat.category_name;
+                              const isSelected = filterExamNames.includes(name);
+                              return (
+                                <CommandItem
+                                  key={cat._id || cat.id}
+                                  className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
+                                  onSelect={() => {
+                                    setFilterExamNames(prev => 
+                                      isSelected ? prev.filter(n => n !== name) : [...prev, name]
+                                    );
+                                  }}
+                                >
+                                  <Check className={`mr-2 h-3.5 w-3.5 ${isSelected ? "text-indigo-600" : "opacity-0"}`} />
+                                  {name}
+                                </CommandItem>
+                              );
+                            })}
                           </CommandGroup>
                         </Command>
                       </PopoverContent>
@@ -1256,7 +1235,7 @@ const Questions = () => {
                           className="h-10 w-full justify-between text-xs font-medium border-gray-200 rounded-xl bg-gray-50/30 hover:bg-white hover:border-indigo-200 transition-all text-left px-3"
                         >
                           <span className="truncate">
-                            {filterSubject && filterSubject !== 'all' ? filterSubject : "All Subjects"}
+                            {filterSubjects.length === 0 ? "All Subjects" : `${filterSubjects.length} Selected`}
                           </span>
                           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-40" />
                         </Button>
@@ -1266,29 +1245,24 @@ const Questions = () => {
                           <CommandInput placeholder="Search subject..." className="h-10 text-xs" />
                           <CommandEmpty className="text-[10px] py-4 text-center text-gray-400">No subject found.</CommandEmpty>
                           <CommandGroup className="max-h-[220px] overflow-y-auto">
-                            <CommandItem
-                              className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
-                              onSelect={() => {
-                                setFilterSubject("all");
-                                setOpenSubjectSearch(false);
-                              }}
-                            >
-                              <Check className={`mr-2 h-3.5 w-3.5 ${filterSubject === "all" ? "text-indigo-600" : "opacity-0"}`} />
-                              All Subjects
-                            </CommandItem>
-                            {subjects.map((sub) => (
-                              <CommandItem
-                                key={sub._id || sub.id}
-                                className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
-                                onSelect={() => {
-                                  setFilterSubject(sub.name || sub.subject_name);
-                                  setOpenSubjectSearch(false);
-                                }}
-                              >
-                                <Check className={`mr-2 h-3.5 w-3.5 ${filterSubject === (sub.name || sub.subject_name) ? "text-indigo-600" : "opacity-0"}`} />
-                                {sub.name || sub.subject_name}
-                              </CommandItem>
-                            ))}
+                            {subjects.map((sub) => {
+                              const name = sub.name || sub.subject_name;
+                              const isSelected = filterSubjects.includes(name);
+                              return (
+                                <CommandItem
+                                  key={sub._id || sub.id}
+                                  className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
+                                  onSelect={() => {
+                                    setFilterSubjects(prev => 
+                                      isSelected ? prev.filter(n => n !== name) : [...prev, name]
+                                    );
+                                  }}
+                                >
+                                  <Check className={`mr-2 h-3.5 w-3.5 ${isSelected ? "text-indigo-600" : "opacity-0"}`} />
+                                  {name}
+                                </CommandItem>
+                              );
+                            })}
                           </CommandGroup>
                         </Command>
                       </PopoverContent>
@@ -1308,7 +1282,7 @@ const Questions = () => {
                           className="h-10 w-full justify-between text-xs font-medium border-gray-200 rounded-xl bg-gray-50/30 hover:bg-white hover:border-indigo-200 transition-all text-left px-3"
                         >
                           <span className="truncate">
-                            {filterTopic && filterTopic !== 'all' ? filterTopic : "All Topics"}
+                            {filterTopics.length === 0 ? "All Topics" : `${filterTopics.length} Selected`}
                           </span>
                           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-40" />
                         </Button>
@@ -1318,29 +1292,24 @@ const Questions = () => {
                           <CommandInput placeholder="Search topic..." className="h-10 text-xs" />
                           <CommandEmpty className="text-[10px] py-4 text-center text-gray-400">No topic found.</CommandEmpty>
                           <CommandGroup className="max-h-[220px] overflow-y-auto">
-                            <CommandItem
-                              className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
-                              onSelect={() => {
-                                setFilterTopic("all");
-                                setOpenTopicSearch(false);
-                              }}
-                            >
-                              <Check className={`mr-2 h-3.5 w-3.5 ${filterTopic === "all" ? "text-indigo-600" : "opacity-0"}`} />
-                              All Topics
-                            </CommandItem>
-                            {topics.map((topic) => (
-                              <CommandItem
-                                key={topic._id || topic.id}
-                                className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
-                                onSelect={() => {
-                                  setFilterTopic(topic.name || topic.topic_name);
-                                  setOpenTopicSearch(false);
-                                }}
-                              >
-                                <Check className={`mr-2 h-3.5 w-3.5 ${filterTopic === (topic.name || topic.topic_name) ? "text-indigo-600" : "opacity-0"}`} />
-                                {topic.name || topic.topic_name}
-                              </CommandItem>
-                            ))}
+                            {topics.map((topic) => {
+                              const name = topic.name || topic.topic_name;
+                              const isSelected = filterTopics.includes(name);
+                              return (
+                                <CommandItem
+                                  key={topic._id || topic.id}
+                                  className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
+                                  onSelect={() => {
+                                    setFilterTopics(prev => 
+                                      isSelected ? prev.filter(n => n !== name) : [...prev, name]
+                                    );
+                                  }}
+                                >
+                                  <Check className={`mr-2 h-3.5 w-3.5 ${isSelected ? "text-indigo-600" : "opacity-0"}`} />
+                                  {name}
+                                </CommandItem>
+                              );
+                            })}
                           </CommandGroup>
                         </Command>
                       </PopoverContent>
@@ -1356,21 +1325,19 @@ const Questions = () => {
                       <Label className="text-[11px] font-bold text-slate-500 whitespace-nowrap">
                         Difficulty Level
                       </Label>
-                      <div className="flex gap-1.5 bg-gray-100/50 p-1 rounded-xl border border-gray-200">
-                        {['all', '1', '3', '5', '7', '9'].map((val) => (
-                          <button
-                            key={val}
-                            onClick={() => setFilterDifficulty(val)}
-                            className={`h-7 min-w-[32px] px-2 rounded-lg text-[10px] font-bold transition-all ${
-                              filterDifficulty === val 
-                                ? "bg-white text-indigo-600 shadow-sm ring-1 ring-black/5" 
-                                : "text-gray-400 hover:text-gray-600"
-                            }`}
-                          >
-                            {val === 'all' ? 'ALL' : val}
-                          </button>
-                        ))}
-                      </div>
+                      <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
+                        <SelectTrigger className="h-9 w-[130px] text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
+                          <SelectValue placeholder="All Levels" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                          <SelectItem value="all">All Levels</SelectItem>
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(level => (
+                            <SelectItem key={level} value={level.toString()}>
+                              Level {level}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {/* Quick Access Icons */}
@@ -1389,8 +1356,8 @@ const Questions = () => {
                     {/* Items Per Page */}
                     <div className="flex items-center gap-3 bg-gray-50/50 px-3 py-1.5 rounded-xl border border-gray-100">
                       <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight whitespace-nowrap">Show</Label>
-                      <select 
-                        value={itemsPerPage.toString()} 
+                      <select
+                        value={itemsPerPage.toString()}
                         onChange={(e) => setItemsPerPage(parseInt(e.target.value))}
                         className="bg-transparent border-none text-[11px] font-bold text-indigo-600 focus:ring-0 cursor-pointer"
                       >
@@ -1450,7 +1417,7 @@ const Questions = () => {
                     <div className="mb-3 text-4xl">❓</div>
                     <p className="font-semibold text-base">No questions found</p>
                     <p className="text-muted-foreground text-sm mt-1">
-                      {searchQuery || filterDifficulty !== 'all' || filterExamName || filterSubject || filterTopic
+                      {searchQuery || filterDifficulty !== 'all' || filterExamNames.length > 0 || filterSubjects.length > 0 || filterTopics.length > 0
                         ? 'Try adjusting your filters'
                         : 'Click "Add question" to create your first one.'}
                     </p>
@@ -1481,11 +1448,11 @@ const Questions = () => {
                         {filteredQuestions.map((question, idx) => {
                           const questionId = question._id || question.id || '';
                           const examNames = question.exam_names || [];
-                          const subs = (Array.isArray(question.subject_ids) ? question.subject_ids : 
-                                           (question.subject_id ? [question.subject_id] : []));
-                          const tops = (Array.isArray(question.topic_ids) ? question.topic_ids : 
-                                         (question.topic_id ? [question.topic_id] : []));
-                          
+                          const subs = (Array.isArray(question.subject_ids) ? question.subject_ids :
+                            (question.subject_id ? [question.subject_id] : []));
+                          const tops = (Array.isArray(question.topic_ids) ? question.topic_ids :
+                            (question.topic_id ? [question.topic_id] : []));
+
                           return (
                             <tr key={questionId} className={`hover:bg-gray-50/50 transition-colors ${selectedQuestions.has(questionId) ? 'bg-blue-50/30' : ''}`}>
                               <td className="p-3">
@@ -1519,11 +1486,11 @@ const Questions = () => {
                                       <X className="h-2 w-2 cursor-pointer" onClick={() => handleRemoveAssignment(question, 'exam', name)} />
                                     </Badge>
                                   ))}
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-5 w-5 rounded-full hover:bg-gray-100 text-gray-400"
-                                    onClick={() => setQuickAssignTarget({question, type: 'exam'})}
+                                    onClick={() => setQuickAssignTarget({ question, type: 'exam' })}
                                   >
                                     <Plus className="h-3 w-3" />
                                   </Button>
@@ -1537,11 +1504,11 @@ const Questions = () => {
                                       <X className="h-2 w-2 cursor-pointer" onClick={() => handleRemoveAssignment(question, 'subject', typeof s === 'string' ? s : (s._id || s.id))} />
                                     </Badge>
                                   ))}
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-5 w-5 rounded-full hover:bg-gray-100 text-gray-400"
-                                    onClick={() => setQuickAssignTarget({question, type: 'subject'})}
+                                    onClick={() => setQuickAssignTarget({ question, type: 'subject' })}
                                   >
                                     <Plus className="h-3 w-3" />
                                   </Button>
@@ -1555,22 +1522,21 @@ const Questions = () => {
                                       <X className="h-2 w-2 cursor-pointer" onClick={() => handleRemoveAssignment(question, 'topic', typeof t === 'string' ? t : (t._id || t.id))} />
                                     </Badge>
                                   ))}
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-5 w-5 rounded-full hover:bg-gray-100 text-gray-400"
-                                    onClick={() => setQuickAssignTarget({question, type: 'topic'})}
+                                    onClick={() => setQuickAssignTarget({ question, type: 'topic' })}
                                   >
                                     <Plus className="h-3 w-3" />
                                   </Button>
                                 </div>
                               </td>
                               <td className="p-3">
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                                  question.difficulty_level <= 3 ? 'bg-green-100 text-green-700' :
-                                  question.difficulty_level <= 7 ? 'bg-orange-100 text-orange-700' :
-                                  'bg-red-100 text-red-700'
-                                }`}>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${question.difficulty_level <= 3 ? 'bg-green-100 text-green-700' :
+                                    question.difficulty_level <= 7 ? 'bg-orange-100 text-orange-700' :
+                                      'bg-red-100 text-red-700'
+                                  }`}>
                                   {question.difficulty_level}
                                 </span>
                               </td>
@@ -1678,8 +1644,8 @@ const Questions = () => {
                     <code className="bg-blue-100 px-1 rounded">[LVL]</code> for difficulty (optional).
                   </p>
                   <p className="text-xs text-blue-700 font-mono bg-blue-100/50 p-2 rounded">
-                    [Q] What is 2+2? [LVL] 3<br/>
-                    (a) 3 (b) 4 (c) 5 (d) 6<br/>
+                    [Q] What is 2+2? [LVL] 3<br />
+                    (a) 3 (b) 4 (c) 5 (d) 6<br />
                     [ANS] b [SOL] Basic addition
                   </p>
                 </div>
@@ -1848,11 +1814,10 @@ const Questions = () => {
                       <button
                         key={lang}
                         onClick={() => setLanguageFilter(lang)}
-                        className={`px-3 py-1 text-[10px] font-bold uppercase rounded-md transition-all ${
-                          languageFilter === lang 
-                            ? 'bg-white text-blue-600 shadow-sm' 
+                        className={`px-3 py-1 text-[10px] font-bold uppercase rounded-md transition-all ${languageFilter === lang
+                            ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-gray-500 hover:text-gray-700'
-                        }`}
+                          }`}
                       >
                         {lang}
                       </button>
@@ -1892,22 +1857,21 @@ const Questions = () => {
                       { label: 'C', text: viewingQuestion.option_c, hindi: viewingQuestion.option_c_hindi },
                       { label: 'D', text: viewingQuestion.option_d, hindi: viewingQuestion.option_d_hindi },
                     ].map((opt, idx) => {
-                      const isCorrect = Array.isArray(viewingQuestion.correct_answers) 
+                      const isCorrect = Array.isArray(viewingQuestion.correct_answers)
                         ? viewingQuestion.correct_answers.includes(idx)
                         : viewingQuestion.correct_answer === idx;
-                      
+
                       return (opt.text || opt.hindi) && (
                         <div
                           key={idx}
                           className={`rounded-xl border p-4 transition-all shadow-sm ${isCorrect
-                              ? 'border-green-500 bg-green-50/50 ring-1 ring-green-500/20'
-                              : 'border-gray-100 bg-white'
+                            ? 'border-green-500 bg-green-50/50 ring-1 ring-green-500/20'
+                            : 'border-gray-100 bg-white'
                             }`}
                         >
                           <div className="flex items-start gap-4">
-                            <span className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                              isCorrect ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
-                            }`}>
+                            <span className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 ${isCorrect ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
+                              }`}>
                               {opt.label}
                             </span>
                             <div className="flex-1 min-w-0 space-y-2">
@@ -2060,21 +2024,21 @@ const Questions = () => {
                 />
               </div>
               <div className="max-h-[300px] overflow-y-auto space-y-1 pr-1">
-                {(quickAssignTarget?.type === 'exam' ? categories : 
-                  quickAssignTarget?.type === 'subject' ? subjects : 
-                  topics).filter(item => 
-                    (item.name || item.category_name || item.subject_name || item.topic_name || "")
-                    .toLowerCase().includes(assignSearchQuery.toLowerCase())
-                  ).map((item) => (
-                    <Button
-                      key={item._id || item.id}
-                      variant="ghost"
-                      className="w-full justify-start text-xs h-9 hover:bg-primary/5 hover:text-primary"
-                      onClick={() => handleQuickAssign(item._id || item.id, item.name || item.category_name || item.subject_name || item.topic_name)}
-                    >
-                      {item.name || item.category_name || item.subject_name || item.topic_name}
-                    </Button>
-                  ))
+                {(quickAssignTarget?.type === 'exam' ? categories :
+                  quickAssignTarget?.type === 'subject' ? subjects :
+                    topics).filter(item =>
+                      (item.name || item.category_name || item.subject_name || item.topic_name || "")
+                        .toLowerCase().includes(assignSearchQuery.toLowerCase())
+                    ).map((item) => (
+                      <Button
+                        key={item._id || item.id}
+                        variant="ghost"
+                        className="w-full justify-start text-xs h-9 hover:bg-primary/5 hover:text-primary"
+                        onClick={() => handleQuickAssign(item._id || item.id, item.name || item.category_name || item.subject_name || item.topic_name)}
+                      >
+                        {item.name || item.category_name || item.subject_name || item.topic_name}
+                      </Button>
+                    ))
                 }
               </div>
             </div>
@@ -2091,11 +2055,11 @@ const Questions = () => {
               <DialogTitle className="text-lg font-semibold text-gray-800">Bulk Add Questions</DialogTitle>
             </DialogHeader>
             <div className="p-6">
-              <BulkUpload 
+              <BulkUpload
                 onUpload={async (file, format) => {
                   await handleBulkUpload(file, format);
                   setShowBulkUploadModal(false);
-                }} 
+                }}
                 onCancel={() => setShowBulkUploadModal(false)}
               />
             </div>
