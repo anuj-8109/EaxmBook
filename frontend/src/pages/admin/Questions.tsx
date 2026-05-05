@@ -78,7 +78,7 @@ const Questions = () => {
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
+  const [filterDifficulties, setFilterDifficulties] = useState<string[]>([]);
   const [languageFilter, setLanguageFilter] = useState<string>('all');
   const [filterExamNames, setFilterExamNames] = useState<string[]>([]);
   const [filterSubjects, setFilterSubjects] = useState<string[]>([]);
@@ -98,6 +98,8 @@ const Questions = () => {
   const [quickAddEnglish, setQuickAddEnglish] = useState('');
   const [quickAddHindi, setQuickAddHindi] = useState('');
   const [quickAddCategory, setQuickAddCategory] = useState('');
+  const [quickAddSubject, setQuickAddSubject] = useState('');
+  const [quickAddTopic, setQuickAddTopic] = useState('');
   const [quickAddDifficulty, setQuickAddDifficulty] = useState('5');
   const [quickAddTime, setQuickAddTime] = useState('60');
   const [quickAddSource, setQuickAddSource] = useState('');
@@ -116,7 +118,7 @@ const Questions = () => {
   const [viewingQuestionDetails, setViewingQuestionDetails] = useState<Question | null>(null);
 
   // Quick Assign states
-  const [quickAssignTarget, setQuickAssignTarget] = useState<{ question: Question, type: 'exam' | 'subject' | 'topic' } | null>(null);
+  const [quickAssignTarget, setQuickAssignTarget] = useState<{ question: Question, type: 'exam' | 'subject' | 'topic', isBatch?: boolean } | null>(null);
   const [assignSearchQuery, setAssignSearchQuery] = useState('');
 
   // Search states for comboboxes
@@ -214,9 +216,16 @@ const Questions = () => {
   }, [editingQuestion]);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [filterDifficulties, filterExamNames, filterSubjects, filterTopics, languageFilter]);
+
+  useEffect(() => {
     fetchQuestions();
+  }, [currentPage, itemsPerPage, filterDifficulties, filterExamNames, filterSubjects, filterTopics, languageFilter]);
+
+  useEffect(() => {
     fetchCategoriesAndTags();
-  }, [currentPage, itemsPerPage]);
+  }, []);
 
   const fetchCategoriesAndTags = async () => {
     try {
@@ -244,15 +253,12 @@ const Questions = () => {
 
   useEffect(() => {
     filterQuestions();
-  }, [questions, searchQuery, filterDifficulty, filterExamNames, filterSubjects, filterTopics, languageFilter]);
+  }, [questions, searchQuery, filterDifficulties, filterExamNames, filterSubjects, filterTopics, languageFilter]);
 
   const fetchQuestions = async () => {
     setLoading(true);
     try {
       const params: any = { page: currentPage, limit: itemsPerPage };
-      if (filterDifficulty !== 'all') params.difficulty_level = filterDifficulty;
-      if (languageFilter !== 'all') params.language = languageFilter;
-
       const data = await questionsAPI.getAll(params);
       // Handle paginated response: {questions: [...], total: 75, page: 1, limit: 50}
       // or direct array response
@@ -296,9 +302,8 @@ const Questions = () => {
       );
     }
 
-    if (filterDifficulty !== 'all') {
-      const level = parseInt(filterDifficulty);
-      filtered = filtered.filter(q => q.difficulty_level === level);
+    if (filterDifficulties.length > 0) {
+      filtered = filtered.filter(q => filterDifficulties.includes(q.difficulty_level.toString()));
     }
 
     if (filterExamNames.length > 0) {
@@ -306,7 +311,7 @@ const Questions = () => {
         q.exam_names?.some(name => filterExamNames.includes(name))
       );
     }
-    
+
     if (filterSubjects.length > 0) {
       filtered = filtered.filter(q => {
         const questionSubs = (Array.isArray(q.subject_ids) ? q.subject_ids : (q.subject_id ? [q.subject_id] : []))
@@ -314,12 +319,20 @@ const Questions = () => {
         return questionSubs.some(s => filterSubjects.includes(s));
       });
     }
-    
+
     if (filterTopics.length > 0) {
       filtered = filtered.filter(q => {
         const questionTops = (Array.isArray(q.topic_ids) ? q.topic_ids : (q.topic_id ? [q.topic_id] : []))
           .map((t: any) => typeof t === 'string' ? t : (t.name || t.topic_name || t));
         return questionTops.some(t => filterTopics.includes(t));
+      });
+    }
+
+    if (languageFilter !== 'all') {
+      filtered = filtered.filter(q => {
+        if (languageFilter === 'Hindi') return !!q.question_text_hindi;
+        if (languageFilter === 'English') return !!q.question_text && !q.question_text_hindi;
+        return true;
       });
     }
 
@@ -359,7 +372,63 @@ const Questions = () => {
 
   const handleQuickAssign = async (itemId: string, itemName: string) => {
     if (!quickAssignTarget) return;
-    const { question, type } = quickAssignTarget;
+    const { question, type, isBatch } = quickAssignTarget;
+
+    if (isBatch && selectedQuestions.size > 0) {
+      setLoading(true);
+      try {
+        const selectedIdsArray = Array.from(selectedQuestions);
+        // Find all selected question objects from our state
+        const questionsToUpdate = questions.filter(q => selectedIdsArray.includes(q._id || (q as any).id));
+        
+        let successCount = 0;
+        for (const q of questionsToUpdate) {
+          const qId = q._id || (q as any).id;
+          if (!qId) continue;
+
+          let updateData: any = {};
+          if (type === 'exam') {
+            const currentExams = q.exam_names || [];
+            if (!currentExams.includes(itemName)) {
+              updateData.exam_names = [...currentExams, itemName];
+            } else {
+              continue; // Skip if already assigned
+            }
+          } else if (type === 'subject') {
+            const currentSubs = Array.isArray(q.subject_ids) ? q.subject_ids : (q.subject_id ? [q.subject_id] : []);
+            const currentIds = currentSubs.map((s: any) => typeof s === 'string' ? s : (s._id || s.id));
+            if (!currentIds.includes(itemId)) {
+              updateData.subject_ids = [...currentIds, itemId];
+            } else {
+              continue;
+            }
+          } else if (type === 'topic') {
+            const currentTops = Array.isArray(q.topic_ids) ? q.topic_ids : (q.topic_id ? [q.topic_id] : []);
+            const currentIds = currentTops.map((t: any) => typeof t === 'string' ? t : (t._id || t.id));
+            if (!currentIds.includes(itemId)) {
+              updateData.topic_ids = [...currentIds, itemId];
+            } else {
+              continue;
+            }
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await questionsAPI.update(qId, updateData);
+            successCount++;
+          }
+        }
+
+        showSuccess(`Successfully updated ${successCount} questions`);
+        setQuickAssignTarget(null);
+        setSelectedQuestions(new Set());
+        fetchQuestions();
+      } catch (error: any) {
+        showError(error.message || 'Failed to update questions');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     const qId = question._id || (question as any).id;
     if (!qId) {
@@ -630,6 +699,8 @@ const Questions = () => {
           time_duration: parseInt(quickAddTime) || 60,
           question_reference: quickAddSource,
           category_ids: quickAddCategory ? [quickAddCategory] : [],
+          subject_ids: quickAddSubject ? [quickAddSubject] : [],
+          topic_ids: quickAddTopic ? [quickAddTopic] : [],
           explanation: qEn.solution || qHi.solution || '',
           explanation_hindi: qHi.solution || '',
           tags: quickAddTags
@@ -1102,12 +1173,12 @@ const Questions = () => {
             <TabsTrigger value="bulk" className="rounded-lg sm:rounded-xl text-[10px] sm:text-xs px-2 sm:px-3 py-1.5 sm:py-2 whitespace-nowrap flex-shrink-0">
               Bulk Upload
             </TabsTrigger>
-            <TabsTrigger value="generate" className="rounded-lg sm:rounded-xl text-[10px] sm:text-xs px-2 sm:px-3 py-1.5 sm:py-2 whitespace-nowrap flex-shrink-0">
+            {/* <TabsTrigger value="generate" className="rounded-lg sm:rounded-xl text-[10px] sm:text-xs px-2 sm:px-3 py-1.5 sm:py-2 whitespace-nowrap flex-shrink-0">
               Generate Samples
             </TabsTrigger>
             <TabsTrigger value="duplicates" className="rounded-lg sm:rounded-xl text-[10px] sm:text-xs px-2 sm:px-3 py-1.5 sm:py-2 whitespace-nowrap flex-shrink-0">
               Duplicates
-            </TabsTrigger>
+            </TabsTrigger> */}
           </TabsList>
 
           <TabsContent value="list" className="space-y-3 sm:space-y-4">
@@ -1126,7 +1197,7 @@ const Questions = () => {
                     className="h-7 px-2 text-[10px] font-bold text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                     onClick={() => {
                       setSearchQuery('');
-                      setFilterDifficulty('all');
+                      setFilterDifficulties([]);
                       setLanguageFilter('all');
                       setFilterExamNames([]);
                       setFilterSubjects([]);
@@ -1206,7 +1277,7 @@ const Questions = () => {
                                   key={cat._id || cat.id}
                                   className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                                   onSelect={() => {
-                                    setFilterExamNames(prev => 
+                                    setFilterExamNames(prev =>
                                       isSelected ? prev.filter(n => n !== name) : [...prev, name]
                                     );
                                   }}
@@ -1253,7 +1324,7 @@ const Questions = () => {
                                   key={sub._id || sub.id}
                                   className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                                   onSelect={() => {
-                                    setFilterSubjects(prev => 
+                                    setFilterSubjects(prev =>
                                       isSelected ? prev.filter(n => n !== name) : [...prev, name]
                                     );
                                   }}
@@ -1300,7 +1371,7 @@ const Questions = () => {
                                   key={topic._id || topic.id}
                                   className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
                                   onSelect={() => {
-                                    setFilterTopics(prev => 
+                                    setFilterTopics(prev =>
                                       isSelected ? prev.filter(n => n !== name) : [...prev, name]
                                     );
                                   }}
@@ -1325,19 +1396,45 @@ const Questions = () => {
                       <Label className="text-[11px] font-bold text-slate-500 whitespace-nowrap">
                         Difficulty Level
                       </Label>
-                      <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
-                        <SelectTrigger className="h-9 w-[130px] text-xs rounded-xl border-gray-200 bg-gray-50/30 focus:bg-white transition-all hover:border-indigo-200">
-                          <SelectValue placeholder="All Levels" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-gray-100 shadow-xl">
-                          <SelectItem value="all">All Levels</SelectItem>
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(level => (
-                            <SelectItem key={level} value={level.toString()}>
-                              Level {level}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="h-9 w-[140px] justify-between text-xs font-medium border-gray-200 rounded-xl bg-gray-50/30 hover:bg-white hover:border-indigo-200 transition-all text-left px-3"
+                          >
+                            <span className="truncate">
+                              {filterDifficulties.length === 0 ? "All Levels" : `${filterDifficulties.length} Selected`}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-40" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[180px] p-0 rounded-xl shadow-xl border-gray-100">
+                          <Command>
+                            <CommandInput placeholder="Search levels..." className="h-10 text-xs" />
+                            <CommandEmpty className="text-[10px] py-4 text-center text-gray-400">No level found.</CommandEmpty>
+                            <CommandGroup className="max-h-[220px] overflow-y-auto">
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => {
+                                const val = level.toString();
+                                const isSelected = filterDifficulties.includes(val);
+                                return (
+                                  <CommandItem
+                                    key={level}
+                                    className="text-xs py-2 hover:bg-indigo-50 cursor-pointer"
+                                    onSelect={() => {
+                                      setFilterDifficulties(prev =>
+                                        isSelected ? prev.filter(v => v !== val) : [...prev, val]
+                                      );
+                                    }}
+                                  >
+                                    <Check className={`mr-2 h-3.5 w-3.5 ${isSelected ? "text-indigo-600" : "opacity-0"}`} />
+                                    Level {level}
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     {/* Quick Access Icons */}
@@ -1387,15 +1484,42 @@ const Questions = () => {
                   </h2>
                 </div>
                 {selectedQuestions.size > 0 && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQuickAssignTarget({ question: filteredQuestions.find(q => selectedQuestions.has(q._id || q.id)) as Question, type: 'exam', isBatch: true })}
+                      className="text-xs border-blue-200 text-blue-600 hover:bg-blue-50 h-8"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Exam
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQuickAssignTarget({ question: filteredQuestions.find(q => selectedQuestions.has(q._id || q.id)) as Question, type: 'subject', isBatch: true })}
+                      className="text-xs border-indigo-200 text-indigo-600 hover:bg-indigo-50 h-8"
+                    >
+                      <BookOpen className="h-3 w-3 mr-1" />
+                      Subject
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setQuickAssignTarget({ question: filteredQuestions.find(q => selectedQuestions.has(q._id || q.id)) as Question, type: 'topic', isBatch: true })}
+                      className="text-xs border-purple-200 text-purple-600 hover:bg-purple-50 h-8"
+                    >
+                      <FolderTree className="h-3 w-3 mr-1" />
+                      Topic
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setShowAddTagsModal(true)}
-                      className="text-xs sm:text-sm"
+                      className="text-xs h-8"
                     >
-                      <Tags className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                      Add Tags ({selectedQuestions.size})
+                      <Tags className="h-3 w-3 mr-1" />
+                      Tags ({selectedQuestions.size})
                     </Button>
                     <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs sm:text-sm">
                       <Trash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
@@ -1417,7 +1541,7 @@ const Questions = () => {
                     <div className="mb-3 text-4xl">❓</div>
                     <p className="font-semibold text-base">No questions found</p>
                     <p className="text-muted-foreground text-sm mt-1">
-                      {searchQuery || filterDifficulty !== 'all' || filterExamNames.length > 0 || filterSubjects.length > 0 || filterTopics.length > 0
+                      {searchQuery || filterDifficulties.length > 0 || filterExamNames.length > 0 || filterSubjects.length > 0 || filterTopics.length > 0
                         ? 'Try adjusting your filters'
                         : 'Click "Add question" to create your first one.'}
                     </p>
@@ -1534,8 +1658,8 @@ const Questions = () => {
                               </td>
                               <td className="p-3">
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${question.difficulty_level <= 3 ? 'bg-green-100 text-green-700' :
-                                    question.difficulty_level <= 7 ? 'bg-orange-100 text-orange-700' :
-                                      'bg-red-100 text-red-700'
+                                  question.difficulty_level <= 7 ? 'bg-orange-100 text-orange-700' :
+                                    'bg-red-100 text-red-700'
                                   }`}>
                                   {question.difficulty_level}
                                 </span>
@@ -1669,6 +1793,38 @@ const Questions = () => {
                     </Select>
                   </div>
                   <div>
+                    <Label className="text-xs sm:text-sm">Subject (Optional)</Label>
+                    <Select value={quickAddSubject} onValueChange={setQuickAddSubject}>
+                      <SelectTrigger className="mt-1 rounded-lg text-xs sm:text-sm">
+                        <SelectValue placeholder="Select subject" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {subjects.map((sub) => (
+                          <SelectItem key={sub._id || sub.id} value={sub._id || sub.id} className="text-xs sm:text-sm">
+                            {sub.subject_name || sub.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs sm:text-sm">Topic (Optional)</Label>
+                    <Select value={quickAddTopic} onValueChange={setQuickAddTopic}>
+                      <SelectTrigger className="mt-1 rounded-lg text-xs sm:text-sm">
+                        <SelectValue placeholder="Select topic" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {topics.filter(t => !quickAddSubject || t.subject_id === quickAddSubject || t.subject_ids?.includes(quickAddSubject)).map((topic) => (
+                          <SelectItem key={topic._id || topic.id} value={topic._id || topic.id} className="text-xs sm:text-sm">
+                            {topic.topic_name || topic.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
                     <Label className="text-xs sm:text-sm">Default Difficulty</Label>
                     <Select value={quickAddDifficulty} onValueChange={setQuickAddDifficulty}>
                       <SelectTrigger className="mt-1 rounded-lg text-xs sm:text-sm">
@@ -1704,7 +1860,7 @@ const Questions = () => {
 
                 {/* Common Tags */}
                 <div>
-                  <Label className="text-xs sm:text-sm">Common Tags (Optional)</Label>
+
                   <div className="flex flex-wrap gap-2 mt-2">
                     {tags.map((tag) => (
                       <Badge
@@ -1815,8 +1971,8 @@ const Questions = () => {
                         key={lang}
                         onClick={() => setLanguageFilter(lang)}
                         className={`px-3 py-1 text-[10px] font-bold uppercase rounded-md transition-all ${languageFilter === lang
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
                           }`}
                       >
                         {lang}
