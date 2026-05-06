@@ -348,6 +348,10 @@ export const questionsAPI = {
     method: 'DELETE',
     body: JSON.stringify({ ids }),
   }),
+  batchUpdate: (ids: string[], updateData: any) => apiRequest('/questions/batch', {
+    method: 'PUT',
+    body: JSON.stringify({ ids, ...updateData }),
+  }),
   findDuplicates: () => apiRequest('/questions/duplicates/check'),
   bulkCreate: (questions: any[]) => apiRequest('/questions/bulk', {
     method: 'POST',

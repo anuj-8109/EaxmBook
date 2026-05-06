@@ -39,6 +39,12 @@ interface Question {
   correct_answer: number;
 }
 
+// Helper to strip HTML tags
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
 interface Test {
   _id?: string;
   id?: string;
@@ -103,7 +109,7 @@ const AssignQuestions = () => {
     try {
       const [testData, questionsData, categoriesData, subjectsData, topicsData] = await Promise.all([
         testsAPI.getById(testId!),
-        questionsAPI.getAll(),
+        questionsAPI.getAll({ limit: 1000 }),
         categoriesAPI.getAll(true),
         subjectsAPI.getAll(),
         topicsAPI.getAll(),
@@ -645,7 +651,7 @@ const AssignQuestions = () => {
                         className="mt-1"
                       />
                       <div className="flex-1">
-                        <p className="font-medium text-sm">{question.question_text}</p>
+                        <p className="font-medium text-sm">{stripHtml(question.question_text)}</p>
                         <div className="flex flex-wrap gap-2 mt-2">
                           {question.exam_names?.map((name, i) => (
                             <Badge key={i} variant="secondary" className="text-xs">
@@ -717,7 +723,7 @@ const AssignQuestions = () => {
                             Q{idx + 1}
                           </span>
                         </div>
-                        <p className="font-medium text-sm">{question.question_text}</p>
+                        <p className="font-medium text-sm">{stripHtml(question.question_text)}</p>
                       </div>
                     </div>
                   );
@@ -778,19 +784,19 @@ const AssignQuestions = () => {
                       <div className="space-y-3">
                         {assignedQuestions.map((q, idx) => (
                           <div key={q._id || q.id} className="p-4 border rounded-xl">
-                            <p className="font-semibold mb-2">Q{idx + 1}. {q.question_text}</p>
+                            <p className="font-semibold mb-2">Q{idx + 1}. {stripHtml(q.question_text)}</p>
                             <div className="space-y-1 text-sm">
                               <div className={q.correct_answer === 0 ? 'text-green-600 font-semibold' : ''}>
-                                A. {q.option_a}
+                                A. {stripHtml(q.option_a)}
                               </div>
                               <div className={q.correct_answer === 1 ? 'text-green-600 font-semibold' : ''}>
-                                B. {q.option_b}
+                                B. {stripHtml(q.option_b)}
                               </div>
                               <div className={q.correct_answer === 2 ? 'text-green-600 font-semibold' : ''}>
-                                C. {q.option_c}
+                                C. {stripHtml(q.option_c)}
                               </div>
                               <div className={q.correct_answer === 3 ? 'text-green-600 font-semibold' : ''}>
-                                D. {q.option_d}
+                                D. {stripHtml(q.option_d)}
                               </div>
                             </div>
                           </div>

@@ -69,6 +69,12 @@ interface Question {
   explanation_image_url?: string;
 }
 
+// Helper to strip HTML tags
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
 const Questions = () => {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -79,7 +85,7 @@ const Questions = () => {
   const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDifficulties, setFilterDifficulties] = useState<string[]>([]);
-  const [languageFilter, setLanguageFilter] = useState<string>('all');
+  const [languageFilter, setLanguageFilter] = useState<string>('english');
   const [filterExamNames, setFilterExamNames] = useState<string[]>([]);
   const [filterSubjects, setFilterSubjects] = useState<string[]>([]);
   const [filterTopics, setFilterTopics] = useState<string[]>([]);
@@ -378,47 +384,58 @@ const Questions = () => {
       setLoading(true);
       try {
         const selectedIdsArray = Array.from(selectedQuestions);
-        // Find all selected question objects from our state
         const questionsToUpdate = questions.filter(q => selectedIdsArray.includes(q._id || (q as any).id));
         
-        let successCount = 0;
-        for (const q of questionsToUpdate) {
-          const qId = q._id || (q as any).id;
-          if (!qId) continue;
+        // Create lazy update functions (not promises yet)
+        const updateFunctions = questionsToUpdate.map(q => {
+          return () => {
+            const qId = q._id || (q as any).id;
+            if (!qId) return Promise.resolve();
 
-          let updateData: any = {};
-          if (type === 'exam') {
-            const currentExams = q.exam_names || [];
-            if (!currentExams.includes(itemName)) {
-              updateData.exam_names = [...currentExams, itemName];
-            } else {
-              continue; // Skip if already assigned
+            let updateData: any = {};
+            if (type === 'exam') {
+              const currentExams = q.exam_names || [];
+              if (!currentExams.includes(itemName)) {
+                updateData.exam_names = [...currentExams, itemName];
+              } else {
+                return Promise.resolve();
+              }
+            } else if (type === 'subject') {
+              const currentSubs = Array.isArray(q.subject_ids) ? q.subject_ids : (q.subject_id ? [q.subject_id] : []);
+              const currentIds = currentSubs.map((s: any) => typeof s === 'string' ? s : (s._id || s.id));
+              if (!currentIds.includes(itemId)) {
+                updateData.subject_ids = [...currentIds, itemId];
+              } else {
+                return Promise.resolve();
+              }
+            } else if (type === 'topic') {
+              const currentTops = Array.isArray(q.topic_ids) ? q.topic_ids : (q.topic_id ? [q.topic_id] : []);
+              const currentIds = currentTops.map((t: any) => typeof t === 'string' ? t : (t._id || t.id));
+              if (!currentIds.includes(itemId)) {
+                updateData.topic_ids = [...currentIds, itemId];
+              } else {
+                return Promise.resolve();
+              }
             }
-          } else if (type === 'subject') {
-            const currentSubs = Array.isArray(q.subject_ids) ? q.subject_ids : (q.subject_id ? [q.subject_id] : []);
-            const currentIds = currentSubs.map((s: any) => typeof s === 'string' ? s : (s._id || s.id));
-            if (!currentIds.includes(itemId)) {
-              updateData.subject_ids = [...currentIds, itemId];
-            } else {
-              continue;
-            }
-          } else if (type === 'topic') {
-            const currentTops = Array.isArray(q.topic_ids) ? q.topic_ids : (q.topic_id ? [q.topic_id] : []);
-            const currentIds = currentTops.map((t: any) => typeof t === 'string' ? t : (t._id || t.id));
-            if (!currentIds.includes(itemId)) {
-              updateData.topic_ids = [...currentIds, itemId];
-            } else {
-              continue;
-            }
-          }
 
-          if (Object.keys(updateData).length > 0) {
-            await questionsAPI.update(qId, updateData);
-            successCount++;
-          }
+            if (Object.keys(updateData).length > 0) {
+              return questionsAPI.update(qId, updateData);
+            }
+            return Promise.resolve();
+          };
+        });
+
+        // Execute with throttling - max 3 concurrent (backend friendly)
+        const limit = 3;
+        const results: any[] = [];
+        
+        for (let i = 0; i < updateFunctions.length; i += limit) {
+          const batch = updateFunctions.slice(i, i + limit).map(fn => fn());
+          const batchResults = await Promise.all(batch);
+          results.push(...batchResults);
         }
 
-        showSuccess(`Successfully updated ${successCount} questions`);
+        showSuccess(`Successfully updated ${selectedIdsArray.length} questions`);
         setQuickAssignTarget(null);
         setSelectedQuestions(new Set());
         fetchQuestions();
@@ -1584,12 +1601,12 @@ const Questions = () => {
                               </td>
                               <td className="p-3">
                                 <div className="space-y-1">
-                                  <p className="text-xs font-medium line-clamp-2" title={question.question_text}>
-                                    {question.question_text}
+                                  <p className="text-xs font-medium line-clamp-2" title={stripHtml(question.question_text)}>
+                                    {stripHtml(question.question_text)}
                                   </p>
                                   {question.question_text_hindi && (
-                                    <p className="text-[10px] text-muted-foreground line-clamp-1" title={question.question_text_hindi}>
-                                      {question.question_text_hindi}
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1" title={stripHtml(question.question_text_hindi)}>
+                                      {stripHtml(question.question_text_hindi)}
                                     </p>
                                   )}
                                 </div>
@@ -1996,13 +2013,23 @@ const Questions = () => {
                       {(languageFilter === 'both' || languageFilter === 'english') && viewingQuestion.question_text && (
                         <div className="flex gap-3">
                           <span className="shrink-0 px-1.5 py-0.5 h-fit rounded text-[8px] font-bold bg-blue-100 text-blue-600 uppercase tracking-tight">EN</span>
-                          <p>{viewingQuestion.question_text}</p>
+                          <p>{stripHtml(viewingQuestion.question_text)}</p>
                         </div>
                       )}
                       {(languageFilter === 'both' || languageFilter === 'hindi') && viewingQuestion.question_text_hindi && (
                         <div className="flex gap-3 pt-3 border-t border-gray-200">
                           <span className="shrink-0 px-1.5 py-0.5 h-fit rounded text-[8px] font-bold bg-orange-100 text-orange-600 uppercase tracking-tight">HI</span>
-                          <p className="text-gray-700 font-hindi">{viewingQuestion.question_text_hindi}</p>
+                          <p className="text-gray-700 font-hindi">{stripHtml(viewingQuestion.question_text_hindi)}</p>
+                        </div>
+                      )}
+                      {/* Question Image */}
+                      {(viewingQuestion.question_image_url || viewingQuestion.image_url) && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <img 
+                            src={viewingQuestion.question_image_url || viewingQuestion.image_url} 
+                            alt="Question" 
+                            className="max-w-full max-h-[300px] rounded-lg border border-gray-200 object-contain"
+                          />
                         </div>
                       )}
                     </div>
@@ -2039,13 +2066,23 @@ const Questions = () => {
                               {(languageFilter === 'both' || languageFilter === 'english') && opt.text && (
                                 <div className="flex items-center gap-2">
                                   <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
-                                  <p className={`text-xs sm:text-sm font-medium ${isCorrect ? 'text-green-800' : 'text-gray-700'}`}>{opt.text}</p>
+                                  <p className={`text-xs sm:text-sm font-medium ${isCorrect ? 'text-green-800' : 'text-gray-700'}`}>{stripHtml(opt.text)}</p>
                                 </div>
                               )}
                               {(languageFilter === 'both' || languageFilter === 'hindi') && opt.hindi && (
                                 <div className={`flex items-center gap-2 ${(languageFilter === 'both' && opt.text) ? 'pt-2 border-t border-gray-50' : ''}`}>
                                   <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
-                                  <p className={`text-xs sm:text-sm font-medium font-hindi ${isCorrect ? 'text-green-800' : 'text-gray-600 italic'}`}>{opt.hindi}</p>
+                                  <p className={`text-xs sm:text-sm font-medium font-hindi ${isCorrect ? 'text-green-800' : 'text-gray-600 italic'}`}>{stripHtml(opt.hindi)}</p>
+                                </div>
+                              )}
+                              {/* Option Image */}
+                              {viewingQuestion[`option_${opt.label.toLowerCase()}_image_url`] && (
+                                <div className="mt-2">
+                                  <img 
+                                    src={viewingQuestion[`option_${opt.label.toLowerCase()}_image_url`]} 
+                                    alt={`Option ${opt.label}`} 
+                                    className="max-w-full max-h-[150px] rounded-lg border border-gray-200 object-contain"
+                                  />
                                 </div>
                               )}
                             </div>
@@ -2077,22 +2114,36 @@ const Questions = () => {
                   )}
                 </div>
 
-                {(viewingQuestion.hint || viewingQuestion.hint_hindi) && (
+                {(viewingQuestion.hint || viewingQuestion.hint_hindi || viewingQuestion.hint_image_url) && (
                   <div className="space-y-2 pt-4 border-t">
                     <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Hint</Label>
                     <div className="p-3 bg-blue-50/30 rounded-xl border border-blue-100/50">
-                      <p className="text-xs sm:text-sm text-gray-700">{viewingQuestion.hint}</p>
-                      {viewingQuestion.hint_hindi && <p className="text-xs text-gray-500 mt-1 italic">{viewingQuestion.hint_hindi}</p>}
+                      {viewingQuestion.hint && <p className="text-xs sm:text-sm text-gray-700">{stripHtml(viewingQuestion.hint)}</p>}
+                      {viewingQuestion.hint_hindi && <p className="text-xs text-gray-500 mt-1 italic">{stripHtml(viewingQuestion.hint_hindi)}</p>}
+                      {viewingQuestion.hint_image_url && (
+                        <img 
+                          src={viewingQuestion.hint_image_url} 
+                          alt="Hint" 
+                          className="mt-3 max-w-full max-h-[200px] rounded-lg border border-blue-200 object-contain"
+                        />
+                      )}
                     </div>
                   </div>
                 )}
 
-                {(viewingQuestion.explanation || viewingQuestion.explanation_hindi) && (
+                {(viewingQuestion.explanation || viewingQuestion.explanation_hindi || viewingQuestion.explanation_image_url) && (
                   <div className="space-y-2 pt-4 border-t">
                     <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Explanation</Label>
                     <div className="p-3 bg-green-50/30 rounded-xl border border-green-100/50">
-                      <p className="text-xs sm:text-sm text-gray-700">{viewingQuestion.explanation}</p>
-                      {viewingQuestion.explanation_hindi && <p className="text-xs text-gray-500 mt-1 italic">{viewingQuestion.explanation_hindi}</p>}
+                      {viewingQuestion.explanation && <p className="text-xs sm:text-sm text-gray-700">{stripHtml(viewingQuestion.explanation)}</p>}
+                      {viewingQuestion.explanation_hindi && <p className="text-xs text-gray-500 mt-1 italic">{stripHtml(viewingQuestion.explanation_hindi)}</p>}
+                      {viewingQuestion.explanation_image_url && (
+                        <img 
+                          src={viewingQuestion.explanation_image_url} 
+                          alt="Explanation" 
+                          className="mt-3 max-w-full max-h-[200px] rounded-lg border border-green-200 object-contain"
+                        />
+                      )}
                     </div>
                   </div>
                 )}
