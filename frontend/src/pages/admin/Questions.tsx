@@ -1816,7 +1816,20 @@ const Questions = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
-                        {topics.filter(t => !quickAddSubject || t.subject_id === quickAddSubject || t.subject_ids?.includes(quickAddSubject)).map((topic) => (
+                        {topics.filter(t => {
+                          // If no subject selected, show all topics
+                          if (!quickAddSubject) return true;
+                          // Handle subject_id as string or object
+                          const topicSubId = t.subject_id ? (typeof t.subject_id === 'object' ? String(t.subject_id._id || t.subject_id.id || t.subject_id) : String(t.subject_id)) : null;
+                          // Check single subject_id
+                          if (topicSubId === quickAddSubject) return true;
+                          // Check subject_ids array
+                          if (t.subject_ids?.length > 0) {
+                            return t.subject_ids.some((sid: any) => String(sid) === quickAddSubject || (typeof sid === 'object' && String(sid._id || sid.id) === quickAddSubject));
+                          }
+                          // Show topics with no subject (orphan topics)
+                          return true;
+                        }).map((topic) => (
                           <SelectItem key={topic._id || topic.id} value={topic._id || topic.id} className="text-xs sm:text-sm">
                             {topic.topic_name || topic.name}
                           </SelectItem>

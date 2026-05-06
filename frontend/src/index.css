@@ -719,3 +719,73 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* React Quill Rich Text Editor Styles */
+.rich-text-editor .ql-editor {
+  min-height: 150px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.rich-text-editor .ql-toolbar {
+  border-top-left-radius: 0.75rem;
+  border-top-right-radius: 0.75rem;
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted));
+}
+
+.rich-text-editor .ql-container {
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+  border-color: hsl(var(--border));
+  background: white;
+}
+
+.rich-text-editor .ql-snow .ql-picker-label {
+  color: hsl(var(--foreground));
+}
+
+.rich-text-editor .ql-snow .ql-stroke {
+  stroke: hsl(var(--foreground));
+}
+
+.rich-text-editor .ql-snow .ql-fill {
+  fill: hsl(var(--foreground));
+}
+
+.rich-text-editor .ql-editor p {
+  margin-bottom: 0.5em;
+}
+
+.rich-text-editor .ql-editor ul,
+.rich-text-editor .ql-editor ol {
+  padding-left: 1.5em;
+}
+
+/* Dark mode support for Quill */
+.dark .rich-text-editor .ql-toolbar {
+  background: hsl(222 47% 11%);
+  border-color: hsl(220 30% 15%);
+}
+
+.dark .rich-text-editor .ql-container {
+  background: hsl(222 47% 11%);
+  border-color: hsl(220 30% 15%);
+  color: hsl(210 40% 98%);
+}
+
+.dark .rich-text-editor .ql-editor {
+  color: hsl(210 40% 98%);
+}
+
+.dark .rich-text-editor .ql-snow .ql-picker-label {
+  color: hsl(210 40% 98%);
+}
+
+.dark .rich-text-editor .ql-snow .ql-stroke {
+  stroke: hsl(210 40% 98%);
+}
+
+.dark .rich-text-editor .ql-snow .ql-fill {
+  fill: hsl(210 40% 98%);
+}

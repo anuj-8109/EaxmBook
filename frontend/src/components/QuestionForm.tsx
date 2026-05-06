@@ -15,7 +15,7 @@ import 'mathlive';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import CKEditorInput from './CKEditorInput';
+import RichTextEditor from './RichTextEditor';
 import { Type } from 'lucide-react';
 
 // Declare math-field for TypeScript
@@ -109,7 +109,7 @@ const MathInput = ({
             className="h-7 text-[10px] rounded-lg px-2 bg-indigo-500 hover:bg-indigo-600 text-white border-none"
           >
             <Type className="w-3 h-3 mr-1" />
-            Rich Text (CK)
+            Rich Text
           </Button>
           <Button
             type="button"
@@ -272,7 +272,7 @@ const MathInput = ({
             </p>
           </div>
         ) : showCKEditor ? (
-          <CKEditorInput
+          <RichTextEditor
             value={value}
             onChange={onChange}
             placeholder={placeholder}
@@ -652,13 +652,14 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
   const filteredTopics = formData.subject_ids.length > 0
     ? topics.filter(topic => {
       const subId = topic.subject_id;
-      if (!subId) return false;
-      const topicSubId = typeof subId === 'object'
-        ? String((subId as any)._id || (subId as any).id)
+      // Include topics that have no subject_id (orphan topics) or matching subject_id
+      if (!subId) return true; // Show topics without subject assignment
+      const topicSubId = typeof subId === 'object' && subId !== null
+        ? String((subId as any)._id || (subId as any).id || subId)
         : String(subId);
       return formData.subject_ids.some(sid => String(sid) === topicSubId);
     })
-    : [];
+    : topics; // Show all topics when no subject selected
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -904,10 +905,9 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                     if (!val) return;
                     setFormData(prev => ({ ...prev, topic_ids: val !== 'none' ? [val] : [], topic_id: val !== 'none' ? val : null }));
                   }}
-                  disabled={formData.subject_ids.length === 0}
                 >
                   <SelectTrigger id="topic" className="rounded-xl">
-                    <SelectValue placeholder={formData.subject_ids.length > 0 ? "Select topic" : "Select subject first"} />
+                    <SelectValue placeholder={formData.subject_ids.length > 0 ? "Select topic (optional)" : "Select topic (any subject)"} />
                   </SelectTrigger>
                   <SelectContent>
                     {dataLoading && (
@@ -921,9 +921,9 @@ export const QuestionForm = ({ initialData, onSubmit, onCancel, loading }: Quest
                         Error: {dataError}
                       </div>
                     )}
-                    {!dataLoading && !dataError && filteredTopics.length === 0 && formData.subject_ids.length > 0 && (
+                    {!dataLoading && !dataError && filteredTopics.length === 0 && (
                       <div className="py-6 px-2 text-center text-sm text-muted-foreground">
-                        No topics available for this subject.<br />
+                        No topics available.<br />
                         <span className="text-xs">Please create topics in Admin → Topics</span>
                       </div>
                     )}

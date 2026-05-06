@@ -145,10 +145,13 @@ const AdminDashboard = () => {
       { label: 'Total Tests', value: stats.overview.totalTests, icon: FileText, color: 'text-pink-600', bg: 'bg-pink-100' },
    ];
 
-   const popularExamsData = stats.testDemand.slice(0, 5).map(t => ({
-      name: t.test_name.substring(0, 15) + (t.test_name.length > 15 ? '...' : ''),
-      attempts: t.attempts
-   }));
+   const popularExamsData = stats.testDemand.slice(0, 5).map(t => {
+      const name = t.test_name || 'Unknown';
+      return {
+         name: name.length > 15 ? name.substring(0, 15) + '...' : name,
+         attempts: t.attempts
+      };
+   });
 
    return (
       <AdminLayout>

@@ -15,9 +15,15 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
       "mathlive/dist/mathlive-fonts.css": path.resolve(__dirname, "node_modules/mathlive/mathlive-fonts.css"),
     },
+    dedupe: ["react", "react-dom"],
   },
   optimizeDeps: {
-    include: ["mathlive", "react-mathlive", "@ckeditor/ckeditor5-react", "@ckeditor/ckeditor5-build-classic"],
+    include: ["mathlive", "react-mathlive", "quill"],
+  },
+  build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
   },
 
 }));
