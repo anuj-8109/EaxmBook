@@ -1512,15 +1512,7 @@ const Questions = () => {
                       <FolderTree className="h-3 w-3 mr-1" />
                       Topic
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowAddTagsModal(true)}
-                      className="text-xs h-8"
-                    >
-                      <Tags className="h-3 w-3 mr-1" />
-                      Tags ({selectedQuestions.size})
-                    </Button>
+                   
                     <Button variant="destructive" size="sm" onClick={handleBatchDelete} className="text-xs sm:text-sm">
                       <Trash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                       Delete ({selectedQuestions.size})
