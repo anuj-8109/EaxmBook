@@ -59,14 +59,22 @@ interface Question {
   subject_id?: any;
   topic_id?: any;
   question_image_url?: string;
+  question_image_url_hindi?: string;
   question_video_url?: string;
   option_a_image_url?: string;
+  option_a_image_url_hindi?: string;
   option_b_image_url?: string;
+  option_b_image_url_hindi?: string;
   option_c_image_url?: string;
+  option_c_image_url_hindi?: string;
   option_d_image_url?: string;
+  option_d_image_url_hindi?: string;
   option_x_image_url?: string;
+  option_x_image_url_hindi?: string;
   hint_image_url?: string;
+  hint_image_url_hindi?: string;
   explanation_image_url?: string;
+  explanation_image_url_hindi?: string;
 }
 
 // Helper to strip HTML tags
@@ -2022,12 +2030,28 @@ const Questions = () => {
                           <p className="text-gray-700 font-hindi">{stripHtml(viewingQuestion.question_text_hindi)}</p>
                         </div>
                       )}
-                      {/* Question Image */}
-                      {(viewingQuestion.question_image_url || viewingQuestion.image_url) && (
+                      {/* Question Image - English */}
+                      {(languageFilter === 'both' || languageFilter === 'english') && (viewingQuestion.question_image_url || viewingQuestion.image_url) && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
+                          </div>
                           <img 
                             src={viewingQuestion.question_image_url || viewingQuestion.image_url} 
-                            alt="Question" 
+                            alt="Question English" 
+                            className="max-w-full max-h-[300px] rounded-lg border border-gray-200 object-contain"
+                          />
+                        </div>
+                      )}
+                      {/* Question Image - Hindi */}
+                      {(languageFilter === 'both' || languageFilter === 'hindi') && (viewingQuestion.question_image_url_hindi) && (
+                        <div className={`mt-4 pt-4 border-t border-gray-200 ${languageFilter === 'both' ? 'border-dashed' : ''}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
+                          </div>
+                          <img 
+                            src={viewingQuestion.question_image_url_hindi} 
+                            alt="Question Hindi" 
                             className="max-w-full max-h-[300px] rounded-lg border border-gray-200 object-contain"
                           />
                         </div>
@@ -2040,10 +2064,10 @@ const Questions = () => {
                   <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Options (Bilingual)</Label>
                   <div className="grid grid-cols-1 gap-4">
                     {[
-                      { label: 'A', text: viewingQuestion.option_a, hindi: viewingQuestion.option_a_hindi },
-                      { label: 'B', text: viewingQuestion.option_b, hindi: viewingQuestion.option_b_hindi },
-                      { label: 'C', text: viewingQuestion.option_c, hindi: viewingQuestion.option_c_hindi },
-                      { label: 'D', text: viewingQuestion.option_d, hindi: viewingQuestion.option_d_hindi },
+                      { label: 'A', text: viewingQuestion.option_a, hindi: viewingQuestion.option_a_hindi, image: viewingQuestion.option_a_image_url, image_hindi: viewingQuestion.option_a_image_url_hindi },
+                      { label: 'B', text: viewingQuestion.option_b, hindi: viewingQuestion.option_b_hindi, image: viewingQuestion.option_b_image_url, image_hindi: viewingQuestion.option_b_image_url_hindi },
+                      { label: 'C', text: viewingQuestion.option_c, hindi: viewingQuestion.option_c_hindi, image: viewingQuestion.option_c_image_url, image_hindi: viewingQuestion.option_c_image_url_hindi },
+                      { label: 'D', text: viewingQuestion.option_d, hindi: viewingQuestion.option_d_hindi, image: viewingQuestion.option_d_image_url, image_hindi: viewingQuestion.option_d_image_url_hindi },
                     ].map((opt, idx) => {
                       const isCorrect = Array.isArray(viewingQuestion.correct_answers)
                         ? viewingQuestion.correct_answers.includes(idx)
@@ -2075,12 +2099,28 @@ const Questions = () => {
                                   <p className={`text-xs sm:text-sm font-medium font-hindi ${isCorrect ? 'text-green-800' : 'text-gray-600 italic'}`}>{stripHtml(opt.hindi)}</p>
                                 </div>
                               )}
-                              {/* Option Image */}
-                              {viewingQuestion[`option_${opt.label.toLowerCase()}_image_url`] && (
+                              {/* Option Image - English */}
+                              {(languageFilter === 'both' || languageFilter === 'english') && opt.image && (
                                 <div className="mt-2">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
+                                  </div>
                                   <img 
-                                    src={viewingQuestion[`option_${opt.label.toLowerCase()}_image_url`]} 
-                                    alt={`Option ${opt.label}`} 
+                                    src={opt.image} 
+                                    alt={`Option ${opt.label} English`} 
+                                    className="max-w-full max-h-[150px] rounded-lg border border-gray-200 object-contain"
+                                  />
+                                </div>
+                              )}
+                              {/* Option Image - Hindi */}
+                              {(languageFilter === 'both' || languageFilter === 'hindi') && opt.image_hindi && (
+                                <div className={`mt-2 ${languageFilter === 'both' ? 'border-t border-dashed border-gray-200 pt-2' : ''}`}>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
+                                  </div>
+                                  <img 
+                                    src={opt.image_hindi} 
+                                    alt={`Option ${opt.label} Hindi`} 
                                     className="max-w-full max-h-[150px] rounded-lg border border-gray-200 object-contain"
                                   />
                                 </div>
@@ -2114,35 +2154,99 @@ const Questions = () => {
                   )}
                 </div>
 
-                {(viewingQuestion.hint || viewingQuestion.hint_hindi || viewingQuestion.hint_image_url) && (
+                {((languageFilter === 'both' || languageFilter === 'english') && (viewingQuestion.hint || viewingQuestion.hint_image_url) ||
+                  (languageFilter === 'both' || languageFilter === 'hindi') && (viewingQuestion.hint_hindi || viewingQuestion.hint_image_url_hindi)) && (
                   <div className="space-y-2 pt-4 border-t">
                     <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Hint</Label>
                     <div className="p-3 bg-blue-50/30 rounded-xl border border-blue-100/50">
-                      {viewingQuestion.hint && <p className="text-xs sm:text-sm text-gray-700">{stripHtml(viewingQuestion.hint)}</p>}
-                      {viewingQuestion.hint_hindi && <p className="text-xs text-gray-500 mt-1 italic">{stripHtml(viewingQuestion.hint_hindi)}</p>}
-                      {viewingQuestion.hint_image_url && (
-                        <img 
-                          src={viewingQuestion.hint_image_url} 
-                          alt="Hint" 
-                          className="mt-3 max-w-full max-h-[200px] rounded-lg border border-blue-200 object-contain"
-                        />
+                      {/* Hint Text - English */}
+                      {(languageFilter === 'both' || languageFilter === 'english') && viewingQuestion.hint && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
+                          <p className="text-xs sm:text-sm text-gray-700">{stripHtml(viewingQuestion.hint)}</p>
+                        </div>
+                      )}
+                      {/* Hint Text - Hindi */}
+                      {(languageFilter === 'both' || languageFilter === 'hindi') && viewingQuestion.hint_hindi && (
+                        <div className={`flex items-center gap-2 ${(languageFilter === 'both' && viewingQuestion.hint) ? 'mt-2 pt-2 border-t border-blue-200/30' : ''}`}>
+                          <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
+                          <p className="text-xs sm:text-sm text-gray-700 font-hindi">{stripHtml(viewingQuestion.hint_hindi)}</p>
+                        </div>
+                      )}
+                      {/* Hint Image - English */}
+                      {(languageFilter === 'both' || languageFilter === 'english') && viewingQuestion.hint_image_url && (
+                        <div className="mt-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
+                          </div>
+                          <img 
+                            src={viewingQuestion.hint_image_url} 
+                            alt="Hint English" 
+                            className="max-w-full max-h-[200px] rounded-lg border border-blue-200 object-contain"
+                          />
+                        </div>
+                      )}
+                      {/* Hint Image - Hindi */}
+                      {(languageFilter === 'both' || languageFilter === 'hindi') && viewingQuestion.hint_image_url_hindi && (
+                        <div className={`mt-3 ${languageFilter === 'both' ? 'border-t border-dashed border-blue-200/50 pt-3' : ''}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
+                          </div>
+                          <img 
+                            src={viewingQuestion.hint_image_url_hindi} 
+                            alt="Hint Hindi" 
+                            className="max-w-full max-h-[200px] rounded-lg border border-blue-200 object-contain"
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {(viewingQuestion.explanation || viewingQuestion.explanation_hindi || viewingQuestion.explanation_image_url) && (
+                {((languageFilter === 'both' || languageFilter === 'english') && (viewingQuestion.explanation || viewingQuestion.explanation_image_url) ||
+                  (languageFilter === 'both' || languageFilter === 'hindi') && (viewingQuestion.explanation_hindi || viewingQuestion.explanation_image_url_hindi)) && (
                   <div className="space-y-2 pt-4 border-t">
                     <Label className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">Explanation</Label>
                     <div className="p-3 bg-green-50/30 rounded-xl border border-green-100/50">
-                      {viewingQuestion.explanation && <p className="text-xs sm:text-sm text-gray-700">{stripHtml(viewingQuestion.explanation)}</p>}
-                      {viewingQuestion.explanation_hindi && <p className="text-xs text-gray-500 mt-1 italic">{stripHtml(viewingQuestion.explanation_hindi)}</p>}
-                      {viewingQuestion.explanation_image_url && (
-                        <img 
-                          src={viewingQuestion.explanation_image_url} 
-                          alt="Explanation" 
-                          className="mt-3 max-w-full max-h-[200px] rounded-lg border border-green-200 object-contain"
-                        />
+                      {/* Explanation Text - English */}
+                      {(languageFilter === 'both' || languageFilter === 'english') && viewingQuestion.explanation && (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
+                          <p className="text-xs sm:text-sm text-gray-700">{stripHtml(viewingQuestion.explanation)}</p>
+                        </div>
+                      )}
+                      {/* Explanation Text - Hindi */}
+                      {(languageFilter === 'both' || languageFilter === 'hindi') && viewingQuestion.explanation_hindi && (
+                        <div className={`flex items-center gap-2 ${(languageFilter === 'both' && viewingQuestion.explanation) ? 'mt-2 pt-2 border-t border-green-200/30' : ''}`}>
+                          <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
+                          <p className="text-xs sm:text-sm text-gray-700 font-hindi">{stripHtml(viewingQuestion.explanation_hindi)}</p>
+                        </div>
+                      )}
+                      {/* Explanation Image - English */}
+                      {(languageFilter === 'both' || languageFilter === 'english') && viewingQuestion.explanation_image_url && (
+                        <div className="mt-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-blue-600 border-blue-200">English</Badge>
+                          </div>
+                          <img 
+                            src={viewingQuestion.explanation_image_url} 
+                            alt="Explanation English" 
+                            className="max-w-full max-h-[200px] rounded-lg border border-green-200 object-contain"
+                          />
+                        </div>
+                      )}
+                      {/* Explanation Image - Hindi */}
+                      {(languageFilter === 'both' || languageFilter === 'hindi') && viewingQuestion.explanation_image_url_hindi && (
+                        <div className={`mt-3 ${languageFilter === 'both' ? 'border-t border-dashed border-green-200/50 pt-3' : ''}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 text-orange-600 border-orange-200">Hindi</Badge>
+                          </div>
+                          <img 
+                            src={viewingQuestion.explanation_image_url_hindi} 
+                            alt="Explanation Hindi" 
+                            className="max-w-full max-h-[200px] rounded-lg border border-green-200 object-contain"
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
