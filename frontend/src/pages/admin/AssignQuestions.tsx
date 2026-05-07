@@ -53,6 +53,7 @@ interface Test {
   exam_name?: string;
   status?: string;
   publish_at?: string;
+  total_questions?: number;
 }
 
 interface FilterState {
@@ -295,6 +296,17 @@ const AssignQuestions = () => {
       return;
     }
 
+    // Check if adding would exceed total_questions limit
+    const currentCount = assignedQuestions.length;
+    const selectedCount = selectedQuestions.size;
+    const totalCount = currentCount + selectedCount;
+    const maxQuestions = test?.total_questions || 100; // default to 100 if not set
+
+    if (totalCount > maxQuestions) {
+      toast.error(`Cannot assign ${selectedCount} questions. Test limit is ${maxQuestions}, already have ${currentCount}. You can only add ${maxQuestions - currentCount} more.`);
+      return;
+    }
+
     setSaving(true);
     try {
       const selectedArray = Array.from(selectedQuestions);
@@ -437,7 +449,7 @@ const AssignQuestions = () => {
                   </Badge>
                 ))}
                 <Badge variant="default" className="rounded-full px-4 py-2">
-                  Total: {assignedQuestions.length} questions
+                  Total: {assignedQuestions.length}/{test?.total_questions || 100} questions
                 </Badge>
               </div>
             </CardContent>
@@ -684,7 +696,7 @@ const AssignQuestions = () => {
             <CardHeader className="border-b border-border/60 px-4 py-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold">
-                  Assigned Questions ({assignedQuestions.length})
+                  Assigned Questions ({assignedQuestions.length}/{test?.total_questions || 100})
                 </CardTitle>
                 <Button
                   variant="outline"
@@ -774,7 +786,7 @@ const AssignQuestions = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label className="text-xs text-muted-foreground">Total Questions</Label>
-                          <p className="font-semibold">{assignedQuestions.length}</p>
+                          <p className="font-semibold">{assignedQuestions.length}/{test?.total_questions || 100}</p>
                         </div>
                         <div>
                           <Label className="text-xs text-muted-foreground">Status</Label>
