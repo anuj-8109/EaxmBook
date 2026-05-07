@@ -75,6 +75,7 @@ const AssignQuestions = () => {
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pendingAssignments, setPendingAssignments] = useState(0); // Track in-flight assignments
 
   const [categories, setCategories] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -296,21 +297,24 @@ const AssignQuestions = () => {
       return;
     }
 
-    // Check if adding would exceed total_questions limit
+    // Check if adding would exceed total_questions limit (including pending assignments)
     const currentCount = assignedQuestions.length;
     const selectedCount = selectedQuestions.size;
-    const totalCount = currentCount + selectedCount;
-    const maxQuestions = test?.total_questions || 100; // default to 100 if not set
+    const totalAfterAssignment = currentCount + pendingAssignments + selectedCount;
+    const maxQuestions = test?.total_questions || 100;
 
-    if (totalCount > maxQuestions) {
-      toast.error(`Cannot assign ${selectedCount} questions. Test limit is ${maxQuestions}, already have ${currentCount}. You can only add ${maxQuestions - currentCount} more.`);
+    if (totalAfterAssignment > maxQuestions) {
+      const availableSlots = maxQuestions - currentCount - pendingAssignments;
+      toast.error(`Cannot assign ${selectedCount} questions. Test limit is ${maxQuestions}, already have ${currentCount}, ${pendingAssignments} pending. You can only add ${availableSlots > 0 ? availableSlots : 0} more.`);
       return;
     }
 
     setSaving(true);
+    setPendingAssignments(prev => prev + selectedCount); // Track pending
+    
     try {
       const selectedArray = Array.from(selectedQuestions);
-      const currentOrder = assignedQuestions.length;
+      const currentOrder = assignedQuestions.length + pendingAssignments; // Account for pending
 
       for (let i = 0; i < selectedArray.length; i++) {
         await testsAPI.addQuestion(testId!, selectedArray[i], currentOrder + i + 1);
@@ -318,11 +322,12 @@ const AssignQuestions = () => {
 
       toast.success(`${selectedQuestions.size} questions assigned successfully!`);
       setSelectedQuestions(new Set());
-      fetchData();
+      await fetchData(); // Wait for refresh
     } catch (error: any) {
       toast.error('Failed to assign questions: ' + error.message);
     } finally {
       setSaving(false);
+      setPendingAssignments(prev => Math.max(0, prev - selectedCount)); // Clear pending
     }
   };
 
@@ -603,7 +608,9 @@ const AssignQuestions = () => {
                   Available Questions ({filteredQuestions.length})
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {selectedQuestions.size} selected
+                  {selectedQuestions.size} selected | 
+                  {test?.total_questions || 100 - assignedQuestions.length - pendingAssignments} slots available
+                  {pendingAssignments > 0 && ` (${pendingAssignments} pending)`}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -630,7 +637,8 @@ const AssignQuestions = () => {
                   size="sm"
                   className="rounded-xl"
                   onClick={handleBulkAssign}
-                  disabled={selectedQuestions.size === 0 || saving}
+                  disabled={selectedQuestions.size === 0 || saving || 
+                    (assignedQuestions.length + pendingAssignments + selectedQuestions.size > (test?.total_questions || 100))}
                 >
                   <CheckCircle2 className="h-4 w-4 mr-1" />
                   Assign Selected ({selectedQuestions.size})
